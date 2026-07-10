@@ -14,9 +14,10 @@ stays a local server; "online" is this same server hosted remotely.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ValidationError
 
 from api.commands import (
@@ -28,6 +29,12 @@ from api.commands import (
 from api.settings import Settings, get_setting, load_settings, setting_paths
 from api.state import AppState, EventBus
 from api.ws_events import HelloEvent, ws_schema
+from ports.access import Access, Principal
+
+_LOGGER = logging.getLogger("fableworldsim.api")
+
+_DEFAULT_PRINCIPAL_ID = "local"
+_DEFAULT_ROLES = ("admin",)
 
 
 class SetValueBody(BaseModel):
@@ -36,15 +43,36 @@ class SetValueBody(BaseModel):
     value: Any = None
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def principal_from(request: Request) -> Principal:
+    """Return the requesting principal.
+
+    M1 placeholder identity for local play: connections are the local
+    admin unless they present ``x-fws-principal`` / ``x-fws-roles``
+    headers (which viewers and scripts use to run in the read tier).
+    Real login + throttling replaces this extraction when online play
+    lands; everything downstream (tiers, Access checks) stays as-is.
+    """
+    principal_id = request.headers.get("x-fws-principal", _DEFAULT_PRINCIPAL_ID)
+    raw_roles = request.headers.get("x-fws-roles")
+    roles = (
+        _DEFAULT_ROLES
+        if raw_roles is None
+        else tuple(role.strip() for role in raw_roles.split(",") if role.strip())
+    )
+    return Principal(principal_id=principal_id, roles=roles)
+
+
+def create_app(settings: Settings | None = None, access: Access | None = None) -> FastAPI:
     """Build the API server around a settings instance.
 
     Passing ``settings=None`` hydrates from the ``config/`` folder, the
-    normal startup path.
+    normal startup path; ``access`` defaults to role-based two-tier
+    access (read for everyone, write for editor/admin).
     """
     state = AppState(
         settings=settings if settings is not None else load_settings(),
         bus=EventBus(),
+        access=access,
     )
     app = FastAPI(
         title="FableWorldSim",
@@ -54,8 +82,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     _register_discovery(app, state, build_default_registry())
     _register_settings(app, state)
     _register_stream(app, state)
+    _register_observability(app, state)
     app.state.sim = state
     return app
+
+
+def _deny(state: AppState, principal: Principal, resource: str) -> HTTPException:
+    """Record and build the 403 for an access-tier denial."""
+    state.metrics["commands_denied"] += 1
+    _LOGGER.warning("access denied: principal=%s resource=%s", principal.principal_id, resource)
+    return HTTPException(
+        status_code=403,
+        detail=f"principal {principal.principal_id!r} may not write {resource!r}",
+    )
 
 
 def _register_discovery(app: FastAPI, state: AppState, registry: CommandRegistry) -> None:
@@ -72,17 +111,42 @@ def _register_discovery(app: FastAPI, state: AppState, registry: CommandRegistry
         return registry.describe()
 
     @app.post("/commands/{name}")
-    def run_command(name: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Validate params against the command's model and execute it."""
+    def run_command(
+        name: str, request: Request, body: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Validate params, enforce the access tier, and execute.
+
+        Read-tier commands run concurrently; write-tier commands are
+        checked against the Access policy and serialized through the
+        single-writer lock.
+        """
         try:
             command = registry.get(name)
         except CommandNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        principal = principal_from(request)
+        resource = f"command.{name}"
+        if command.mutates and not state.access.can_write(principal, resource):
+            raise _deny(state, principal, resource)
+        if not command.mutates and not state.access.can_read(principal, resource):
+            raise _deny(state, principal, resource)
         try:
             params = command.params.model_validate(body or {})
         except ValidationError as exc:
             raise HTTPException(status_code=422, detail=exc.errors()) from exc
-        return {"command": name, "result": command.handler(state, params)}
+        _LOGGER.info(
+            "command: name=%s principal=%s mutates=%s",
+            name,
+            principal.principal_id,
+            command.mutates,
+        )
+        if command.mutates:
+            with state.write_lock:
+                result = command.handler(state, params)
+        else:
+            result = command.handler(state, params)
+        state.metrics["commands_executed"] += 1
+        return {"command": name, "result": result}
 
 
 def _register_settings(app: FastAPI, state: AppState) -> None:
@@ -107,14 +171,26 @@ def _register_settings(app: FastAPI, state: AppState) -> None:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.put("/settings/{path}")
-    def write_setting(path: str, body: SetValueBody) -> dict[str, Any]:
+    def write_setting(path: str, body: SetValueBody, request: Request) -> dict[str, Any]:
         """Change one option; validates and broadcasts like set_setting."""
+        principal = principal_from(request)
+        if not state.access.can_write(principal, "settings"):
+            raise _deny(state, principal, "settings")
         try:
             return {"path": path, "value": apply_setting(state, path, body.value)}
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValidationError as exc:
             raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+
+def _register_observability(app: FastAPI, state: AppState) -> None:
+    """Mount the metrics endpoint (structured logs go to stdlib logging)."""
+
+    @app.get("/metrics")
+    def metrics() -> dict[str, int]:
+        """Return monotonically increasing server counters."""
+        return {**state.metrics, "ws_subscribers": state.bus.subscriber_count}
 
 
 def _register_stream(app: FastAPI, state: AppState) -> None:

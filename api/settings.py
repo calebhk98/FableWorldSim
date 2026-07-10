@@ -73,6 +73,14 @@ class PlanetSettings(BaseModel):
     water_fraction: float = Field(default=0.71, ge=0.0, le=1.0)
 
 
+class KernelsSettings(BaseModel):
+    """Hot-kernel implementation choices (the one-line swap surface)."""
+
+    model_config = _FORBID
+
+    flow_accumulation: Literal["auto", "python", "c"] = "auto"
+
+
 class I18nSettings(BaseModel):
     """Locale selection; locales live in content/locales/<lang>.ftl."""
 
@@ -112,6 +120,7 @@ class Settings(BaseSettings):
     compute: ComputeSettings = Field(default_factory=ComputeSettings)
     fidelity: FidelitySettings = Field(default_factory=FidelitySettings)
     planet: PlanetSettings = Field(default_factory=PlanetSettings)
+    kernels: KernelsSettings = Field(default_factory=KernelsSettings)
     i18n: I18nSettings = Field(default_factory=I18nSettings)
     mods: ModsSettings = Field(default_factory=ModsSettings)
     api: ApiServerSettings = Field(default_factory=ApiServerSettings)

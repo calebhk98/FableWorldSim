@@ -12,7 +12,12 @@ from __future__ import annotations
 import tomllib
 from typing import TYPE_CHECKING
 
-from ports.content import ContentItem, ContentNotFoundError, ContentRegistry
+from ports.content import (
+    ContentItem,
+    ContentLoadError,
+    ContentNotFoundError,
+    ContentRegistry,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -32,13 +37,23 @@ class TomlContentRegistry(ContentRegistry):
             self._load_root(source, root)
 
     def _load_root(self, source: str, root: Path) -> None:
-        """Load every ``<kind>/<id>.toml`` under one root."""
+        """Load every ``<kind>/<id>.toml`` under one root.
+
+        A malformed file raises :class:`ports.content.ContentLoadError`
+        naming the mod and file — loading happens before any world state
+        exists, so a broken mod fails cleanly rather than corrupting a
+        world.
+        """
         if not root.is_dir():
             msg = f"content root {root} of mod {source!r} is not a directory"
             raise ContentNotFoundError(msg)
         for kind_dir in sorted(p for p in root.iterdir() if p.is_dir()):
             for item_file in sorted(kind_dir.glob("*.toml")):
-                data = tomllib.loads(item_file.read_text(encoding="utf-8"))
+                try:
+                    data = tomllib.loads(item_file.read_text(encoding="utf-8"))
+                except tomllib.TOMLDecodeError as exc:
+                    msg = f"mod {source!r} has a malformed content file {item_file}: {exc}"
+                    raise ContentLoadError(msg) from exc
                 item = ContentItem(
                     kind=kind_dir.name,
                     item_id=item_file.stem,

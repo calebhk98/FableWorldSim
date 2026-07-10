@@ -9,12 +9,13 @@ possible and call it directly.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from adapters.grid_registry import available_backends
+from adapters.hardware import probe_host, recommend
 from api.settings import get_setting, setting_paths, with_setting
 from api.state import AppState
 from api.ws_events import SettingChangedEvent
@@ -29,12 +30,18 @@ class CommandNotFoundError(LookupError):
 
 @dataclass(frozen=True)
 class Command:
-    """One invocable command with its self-description."""
+    """One invocable command with its self-description.
+
+    ``mutates`` is the access tier: False = read tier (any connection),
+    True = write tier (checked against the Access policy and serialized
+    through the single-writer lock).
+    """
 
     name: str
     description: str
     params: type[BaseModel]
     handler: CommandHandler
+    mutates: bool = False
 
 
 class CommandRegistry:
@@ -63,6 +70,7 @@ class CommandRegistry:
             {
                 "name": command.name,
                 "description": command.description,
+                "mutates": command.mutates,
                 "params": command.params.model_json_schema(),
             }
             for command in sorted(self._commands.values(), key=lambda c: c.name)
@@ -84,10 +92,13 @@ def apply_setting(state: AppState, path: str, value: object) -> object:
     """Set one option, publish the change event, return the new value.
 
     The single write path shared by the set_setting command and the REST
-    settings endpoint, so every surface behaves identically.
+    settings endpoint, so every surface behaves identically — and every
+    write serializes through the single-writer lock.
     """
-    state.settings = with_setting(state.settings, path, value)
-    new_value = get_setting(state.settings, path)
+    with state.write_lock:
+        state.settings = with_setting(state.settings, path, value)
+        new_value = get_setting(state.settings, path)
+        state.metrics["settings_changed"] += 1
     state.bus.publish(SettingChangedEvent(path=path, value=new_value))
     return new_value
 
@@ -120,6 +131,12 @@ def _list_grid_backends(state: AppState, params: BaseModel) -> object:
     return list(available_backends())
 
 
+def _probe_hardware(state: AppState, params: BaseModel) -> object:
+    """Probe the host and return capabilities plus the auto profile."""
+    caps = probe_host()
+    return {"capabilities": asdict(caps), "recommendation": asdict(recommend(caps))}
+
+
 def build_default_registry() -> CommandRegistry:
     """Return the registry of built-in commands."""
     registry = CommandRegistry()
@@ -147,6 +164,7 @@ def build_default_registry() -> CommandRegistry:
             "against the settings schema and broadcast to WS subscribers.",
             SetSettingParams,
             _set_setting,
+            mutates=True,
         )
     )
     registry.register(
@@ -155,6 +173,15 @@ def build_default_registry() -> CommandRegistry:
             "Return the grid backend toggle names known to this build.",
             NoParams,
             _list_grid_backends,
+        )
+    )
+    registry.register(
+        Command(
+            "probe_hardware",
+            "Probe host hardware (CPU cores, RAM, GPUs) and return the "
+            "recommended auto-scaling profile.",
+            NoParams,
+            _probe_hardware,
         )
     )
     return registry

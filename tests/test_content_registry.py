@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from adapters.content_toml import TomlContentRegistry
-from ports.content import ContentNotFoundError
+from ports.content import ContentLoadError, ContentNotFoundError
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -45,6 +45,17 @@ def test_later_mods_overlay_earlier_content(tmp_path: Path) -> None:
     assert wolf.data["name"] == "Dire Wolf"
     assert wolf.source == "coolmod"
     assert registry.ids("species") == ("sandworm", "wolf")
+
+
+def test_broken_mod_fails_cleanly_naming_mod_and_file(tmp_path: Path) -> None:
+    """A malformed mod is a clean load error, never a corrupted world."""
+    base = tmp_path / "base"
+    _write(base, "species", "wolf", 'name = "Wolf"\n')
+    broken = tmp_path / "badmod"
+    _write(broken, "species", "glitch", "name = 'unclosed\n")
+    with pytest.raises(ContentLoadError, match="badmod") as excinfo:
+        TomlContentRegistry([("base", base), ("badmod", broken)])
+    assert "glitch.toml" in str(excinfo.value)
 
 
 def test_missing_content_raises(tmp_path: Path) -> None:

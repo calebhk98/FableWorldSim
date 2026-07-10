@@ -20,6 +20,15 @@ class ContentNotFoundError(LookupError):
     """Raised when a content kind or item id is unknown."""
 
 
+class ContentLoadError(RuntimeError):
+    """Raised when a mod's content cannot be loaded (malformed file, bad root).
+
+    Raised at load time — before any world state is touched — naming the
+    offending mod and file, so a broken mod fails cleanly instead of
+    corrupting the world.
+    """
+
+
 @dataclass(frozen=True)
 class ContentItem:
     """One piece of content: a species, biome, tech node, etc."""

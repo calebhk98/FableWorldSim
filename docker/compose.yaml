@@ -1,0 +1,17 @@
+# Headless core via compose (run from the repository root):
+#   docker compose -f docker/compose.yaml up --build
+services:
+  sim:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
+    # GPU passthrough is opt-in; uncomment on hosts with the NVIDIA toolkit.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]

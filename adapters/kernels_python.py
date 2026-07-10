@@ -22,6 +22,23 @@ NO_RECEIVER = -1
 """Receiver value marking a cell that drains nowhere (pit or ocean)."""
 
 
+def validate_flow_inputs(
+    receivers: Sequence[int],
+    areas_m2: Sequence[float],
+    elevations_m: Sequence[float],
+) -> None:
+    """Validate the shared flow_accumulation contract (all impls use this)."""
+    if not len(receivers) == len(areas_m2) == len(elevations_m):
+        msg = "receivers, areas, and elevations must describe the same cells"
+        raise ValueError(msg)
+    for index, receiver in enumerate(receivers):
+        if receiver == NO_RECEIVER:
+            continue
+        if receiver == index or not 0 <= receiver < len(receivers):
+            msg = f"cell {index} has invalid receiver {receiver}"
+            raise ValueError(msg)
+
+
 def flow_accumulation(
     receivers: Sequence[int],
     areas_m2: Sequence[float],
@@ -32,20 +49,16 @@ def flow_accumulation(
     ``receivers[i]`` is the index each cell drains to (its steepest
     downhill neighbor) or ``NO_RECEIVER``.  Cells are processed from
     highest to lowest so every donor is accumulated before its receiver.
+    This is the reference semantics every other implementation (numpy,
+    GPU, native C) must match exactly.
     """
-    if not len(receivers) == len(areas_m2) == len(elevations_m):
-        msg = "receivers, areas, and elevations must describe the same cells"
-        raise ValueError(msg)
+    validate_flow_inputs(receivers, areas_m2, elevations_m)
     accumulated = list(areas_m2)
     order = sorted(range(len(receivers)), key=lambda i: -elevations_m[i])
     for index in order:
         receiver = receivers[index]
-        if receiver == NO_RECEIVER:
-            continue
-        if receiver == index or not 0 <= receiver < len(receivers):
-            msg = f"cell {index} has invalid receiver {receiver}"
-            raise ValueError(msg)
-        accumulated[receiver] += accumulated[index]
+        if receiver != NO_RECEIVER:
+            accumulated[receiver] += accumulated[index]
     return accumulated
 
 

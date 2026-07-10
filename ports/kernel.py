@@ -22,6 +22,14 @@ class KernelNotFoundError(LookupError):
     """Raised when no implementation is registered for a kernel."""
 
 
+class KernelUnavailableError(RuntimeError):
+    """Raised when a registered implementation cannot run on this host.
+
+    Example: the native C path on a machine without a compiler.  Callers
+    fall back to the reference implementation.
+    """
+
+
 class KernelRegistry:
     """Registry mapping (kernel name, implementation name) to callables."""
 

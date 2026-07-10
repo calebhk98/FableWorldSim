@@ -8,12 +8,16 @@ consumer only backs up its own queue.
 from __future__ import annotations
 
 import asyncio
+import threading
 from typing import TYPE_CHECKING
+
+from adapters.access_roles import RoleBasedAccess
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
     from api.settings import Settings
+    from ports.access import Access
 
 
 class EventBus:
@@ -46,9 +50,27 @@ class EventBus:
 
 
 class AppState:
-    """Mutable per-server state shared by REST, commands, and WS."""
+    """Mutable per-server state shared by REST, commands, and WS.
 
-    def __init__(self, settings: Settings, bus: EventBus) -> None:
-        """Bind the live settings object and the event bus."""
+    The sim is a single authoritative writer with many read-only
+    viewers: every mutation goes through ``write_lock``, serializing
+    changes no matter how many connections submit them.  ``metrics``
+    holds monotonically increasing counters for the /metrics endpoint.
+    """
+
+    def __init__(
+        self,
+        settings: Settings,
+        bus: EventBus,
+        access: Access | None = None,
+    ) -> None:
+        """Bind live settings, the event bus, and the access policy."""
         self.settings = settings
         self.bus = bus
+        self.access = access if access is not None else RoleBasedAccess()
+        self.write_lock = threading.RLock()
+        self.metrics: dict[str, int] = {
+            "commands_executed": 0,
+            "commands_denied": 0,
+            "settings_changed": 0,
+        }
