@@ -63,7 +63,7 @@ def test_default_selection_and_missing_kernels() -> None:
     registry.register("demo", "two", lambda: 2)
     assert registry.get("demo")() == 1
     registry.register("demo", "two", lambda: 2, make_default=True)
-    assert registry.get("demo")() == 2  # noqa: PLR2004 - impl 'two' returns 2
+    assert registry.get("demo")() == 2
     assert registry.kernels() == ("demo",)
     with pytest.raises(KernelNotFoundError, match="no implementations"):
         registry.get("warp_drive")

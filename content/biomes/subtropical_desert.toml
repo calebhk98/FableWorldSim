@@ -1,0 +1,9 @@
+# Subtropical Desert — a Holdridge life zone. Belt 5-5, humidity province
+# 0-0 on the chart (0 polar/arid .. high tropical/rain). Display
+# name is the Fluent key biomes-subtropical_desert in content/locales.
+belt_min = 5
+belt_max = 5
+province_min = 0
+province_max = 0
+vegetation_density = 0.06
+color = "#E0B25E"

@@ -1,0 +1,9 @@
+# Tropical Dry Forest — a Holdridge life zone. Belt 6-6, humidity province
+# 3-3 on the chart (0 polar/arid .. high tropical/rain). Display
+# name is the Fluent key biomes-tropical_dry_forest in content/locales.
+belt_min = 6
+belt_max = 6
+province_min = 3
+province_max = 3
+vegetation_density = 0.55
+color = "#9FB050"

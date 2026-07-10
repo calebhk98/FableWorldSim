@@ -43,7 +43,7 @@ def test_flux_derived_from_luminosity_and_distance() -> None:
 
 def test_flux_given_directly_is_returned_verbatim() -> None:
     """A direct insolation spec is used as-is."""
-    assert _bare_planet(insolation_wm2=42.0).solar_constant_wm2 == 42.0  # noqa: PLR2004
+    assert _bare_planet(insolation_wm2=42.0).solar_constant_wm2 == 42.0
 
 
 def test_energy_spec_must_be_given_exactly_one_way() -> None:

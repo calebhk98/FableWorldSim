@@ -36,6 +36,9 @@ api = ["fastapi>=0.110", "uvicorn>=0.29", "websockets>=12", "fluent.runtime>=0.4
 # --- Storage backends ---
 storage = ["pyarrow>=15", "zarr>=2.17"]
 
+# --- GIS import (real-world DEMs etc.) ---
+gis = ["rasterio>=1.3"]
+
 # --- Developer tooling ---
 # Pulls in the api + wheel-friendly grid extras so the full test suite
 # (cross-backend conservation, API surface) actually runs in CI instead of
@@ -82,7 +85,10 @@ max-nested-blocks = 3                    # enforce early-returns / flat code
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D"]                        # tests need not be docstring-complete
+# Tests need not be docstring-complete; literal expected values are the point
+# of a test (PLR2004), and importorskip-guarded imports must follow the guard
+# (PLC0415/E402 pattern).
+"tests/*" = ["D", "PLR2004", "PLC0415"]
 
 # ---------------------------------------------------------------------------
 # Types — mypy (strict on core + ports; adapters typed against port signatures)

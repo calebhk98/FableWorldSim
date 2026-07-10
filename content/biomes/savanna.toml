@@ -1,0 +1,9 @@
+# Savanna — a Holdridge life zone. Belt 5-6, humidity province
+# 1-2 on the chart (0 polar/arid .. high tropical/rain). Display
+# name is the Fluent key biomes-savanna in content/locales.
+belt_min = 5
+belt_max = 6
+province_min = 1
+province_max = 2
+vegetation_density = 0.4
+color = "#C9A94E"

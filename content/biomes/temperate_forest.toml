@@ -1,0 +1,9 @@
+# Temperate Forest — a Holdridge life zone. Belt 3-4, humidity province
+# 3-4 on the chart (0 polar/arid .. high tropical/rain). Display
+# name is the Fluent key biomes-temperate_forest in content/locales.
+belt_min = 3
+belt_max = 4
+province_min = 3
+province_max = 4
+vegetation_density = 0.8
+color = "#4E8B5A"
