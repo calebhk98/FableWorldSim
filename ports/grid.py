@@ -9,6 +9,16 @@ Because H3 and S2 cells are *not* equal-area, all simulation math must be
 area-weighted / per-unit-area (see ``core.grid.area_weighted``) so results
 stay invariant to the backend toggle and to cell-size variation within a
 backend.
+
+Toggle semantics: backends' cells are not spatially congruent, so the
+backend is chosen at **world-creation time**.  Moving an existing world to
+another backend is an explicit **reprojection** (resample every field; see
+``core.grid.reproject``), never a silent switch.
+
+Contract — variable degree: neighbor count is topology-dependent (H3 and
+ISEA3H hexes have 6 but their 12 pentagons have 5; S2 quads have 4), so
+flux/diffusion math must iterate ``neighbors(cell)`` and weight by
+``edge_length_m``/``area_m2`` — never hardcode a degree.
 """
 
 from __future__ import annotations
@@ -92,12 +102,39 @@ class Grid(ABC):
         """
 
     @abstractmethod
+    def edge_length_m(self, cell: CellId, neighbor: CellId) -> float:
+        """Return the length of the edge shared by two adjacent cells.
+
+        Fluxes between cells (heat, moisture, migration) cross this edge,
+        so flow math weights by edge length — never by a per-cell
+        constant.  Raises ``ValueError`` when the cells are not adjacent.
+        """
+
+    @abstractmethod
     def centroid(self, cell: CellId) -> LatLon:
         """Return the centroid of ``cell`` as latitude/longitude degrees."""
 
     @abstractmethod
     def cell_at(self, point: LatLon) -> CellId:
         """Return the id of the cell containing ``point``."""
+
+    @abstractmethod
+    def parent(self, cell: CellId) -> CellId | None:
+        """Return the containing cell one resolution coarser (LOD).
+
+        Returns ``None`` at the coarsest resolution.
+        """
+
+    @abstractmethod
+    def children(self, cell: CellId) -> Sequence[CellId]:
+        """Return the cells one resolution finer that cover ``cell`` (LOD).
+
+        Returns an empty sequence when the backend cannot refine further.
+        """
+
+    def latlng(self, cell: CellId) -> LatLon:
+        """Return the cell's representative point (alias of ``centroid``)."""
+        return self.centroid(cell)
 
     def total_area_m2(self) -> float:
         """Return the summed area of all cells (approximately 4*pi*r^2)."""

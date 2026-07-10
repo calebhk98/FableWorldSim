@@ -56,6 +56,21 @@ class FakeGrid(Grid):
         """Return every other cell (tetrahedron adjacency)."""
         return tuple(other for other in _FAKE_CELLS if other != cell)
 
+    def edge_length_m(self, cell: CellId, neighbor: CellId) -> float:
+        """Return a symmetric constant edge length (radius-scaled)."""
+        if neighbor not in self.neighbors(cell):
+            msg = f"cells {cell} and {neighbor} are not adjacent"
+            raise ValueError(msg)
+        return self._radius_m
+
+    def parent(self, cell: CellId) -> CellId | None:
+        """Return None: the fake grid has a single resolution."""
+        return None
+
+    def children(self, cell: CellId) -> Sequence[CellId]:
+        """Return no children: the fake grid has a single resolution."""
+        return ()
+
     def area_m2(self, cell: CellId) -> float:
         """Return an equal share of the sphere's surface."""
         return 4.0 * math.pi * self._radius_m**2 / len(_FAKE_CELLS)
@@ -110,3 +125,17 @@ def test_total_area_matches_sphere() -> None:
     grid = FakeGrid(0, radius_m)
     expected = 4.0 * math.pi * radius_m**2
     assert grid.total_area_m2() == pytest.approx(expected)
+
+
+def test_latlng_is_the_centroid_alias() -> None:
+    """The doc's latlng(cell) accessor mirrors centroid(cell)."""
+    grid = FakeGrid(0, 1_000.0)
+    cell = next(iter(grid.cells()))
+    assert grid.latlng(cell) == grid.centroid(cell)
+
+
+def test_edge_length_requires_adjacency() -> None:
+    """Asking for the shared edge of non-neighbors raises."""
+    grid = FakeGrid(0, 1_000.0)
+    with pytest.raises(ValueError, match="not adjacent"):
+        grid.edge_length_m("c0", "c0")

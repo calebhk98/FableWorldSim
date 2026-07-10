@@ -3,7 +3,9 @@
 ISEA (Icosahedral Snyder Equal Area, via the external DGGRID tool) is the
 one built-in backend whose cells genuinely have equal area, making it the
 reference for verifying that area-weighted simulation math is invariant
-to the backend toggle.
+to the backend toggle.  We standardize on the **ISEA3H** topology: hex
+cells plus 12 pentagons (exactly 5/6 of a hex in area), giving H3-like
+adjacency with strictly equal-area hexes.
 
 Wiring DGGRID (an external binary driven through ``dggrid4py``) is part of
 the grid milestone; until then this adapter keeps the toggle name and the
@@ -58,7 +60,19 @@ class IseaGrid(Grid):
         raise GridBackendUnavailableError(_UNAVAILABLE_MSG)
 
     def neighbors(self, cell: CellId) -> Sequence[CellId]:
-        """Return edge-adjacent cells."""
+        """Return edge-adjacent cells (ISEA3H: 6, or 5 at the 12 pentagons)."""
+        raise GridBackendUnavailableError(_UNAVAILABLE_MSG)
+
+    def edge_length_m(self, cell: CellId, neighbor: CellId) -> float:
+        """Return the shared-edge length scaled to the planet radius."""
+        raise GridBackendUnavailableError(_UNAVAILABLE_MSG)
+
+    def parent(self, cell: CellId) -> CellId | None:
+        """Return the parent cell one aperture level coarser."""
+        raise GridBackendUnavailableError(_UNAVAILABLE_MSG)
+
+    def children(self, cell: CellId) -> Sequence[CellId]:
+        """Return the child cells one aperture level finer."""
         raise GridBackendUnavailableError(_UNAVAILABLE_MSG)
 
     def area_m2(self, cell: CellId) -> float:

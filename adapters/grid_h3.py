@@ -69,6 +69,30 @@ class H3Grid(Grid):
         ring = self._h3.grid_disk(cell, 1)
         return tuple(str(other) for other in ring if str(other) != cell)
 
+    def edge_length_m(self, cell: CellId, neighbor: CellId) -> float:
+        """Return the shared-edge length scaled to the planet radius."""
+        try:
+            edge = self._h3.cells_to_directed_edge(cell, neighbor)
+        except self._h3.H3NotNeighborsError as exc:
+            msg = f"cells {cell} and {neighbor} are not adjacent"
+            raise ValueError(msg) from exc
+        radians = float(self._h3.edge_length(edge, unit="rads"))
+        return radians * self._radius_m
+
+    def parent(self, cell: CellId) -> CellId | None:
+        """Return the res-1 parent, or None at resolution 0."""
+        if self._resolution == 0:
+            return None
+        return str(self._h3.cell_to_parent(cell, self._resolution - 1))
+
+    def children(self, cell: CellId) -> Sequence[CellId]:
+        """Return the res+1 children (7, or 6 for a pentagon)."""
+        finest = 15
+        if self._resolution >= finest:
+            return ()
+        kids = self._h3.cell_to_children(cell, self._resolution + 1)
+        return tuple(str(kid) for kid in sorted(kids))
+
     def area_m2(self, cell: CellId) -> float:
         """Return the cell area scaled to the configured planet radius."""
         steradians = float(self._h3.cell_area(cell, unit="rads^2"))

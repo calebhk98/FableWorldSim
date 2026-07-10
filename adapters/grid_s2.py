@@ -11,7 +11,7 @@ areas in steradians scaled by the configured planet radius.
 from __future__ import annotations
 
 from importlib import import_module
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ports.grid import CellId, Grid, GridBackendUnavailableError, LatLon
 
@@ -72,6 +72,43 @@ class S2Grid(Grid):
         """Return the four edge-adjacent cells."""
         cell_id = self._s2.CellId.from_token(cell)
         return tuple(str(other.to_token()) for other in cell_id.get_edge_neighbors())
+
+    def edge_length_m(self, cell: CellId, neighbor: CellId) -> float:
+        """Return the shared-edge length scaled to the planet radius.
+
+        s2sphere exposes no direct shared-edge query, so this matches the
+        two vertices the adjacent cells have in common and measures the
+        great-circle arc between them.
+        """
+        vertex_tol_rad = 1e-9
+        shared_vertex_count = 2
+        mine = self._vertices(cell)
+        theirs = self._vertices(neighbor)
+        shared = [v for v in mine if any(v.angle(w) < vertex_tol_rad for w in theirs)]
+        if len(shared) != shared_vertex_count:
+            msg = f"cells {cell} and {neighbor} are not adjacent"
+            raise ValueError(msg)
+        return float(shared[0].angle(shared[1])) * self._radius_m
+
+    def _vertices(self, cell: CellId) -> list[Any]:
+        """Return the four corner points of a cell."""
+        s2_cell = self._s2.Cell(self._s2.CellId.from_token(cell))
+        return [s2_cell.get_vertex(k) for k in range(4)]
+
+    def parent(self, cell: CellId) -> CellId | None:
+        """Return the level-1 parent, or None at level 0."""
+        if self._resolution == 0:
+            return None
+        cell_id = self._s2.CellId.from_token(cell)
+        return str(cell_id.parent(self._resolution - 1).to_token())
+
+    def children(self, cell: CellId) -> Sequence[CellId]:
+        """Return the four level+1 children."""
+        max_level = 30
+        if self._resolution >= max_level:
+            return ()
+        cell_id = self._s2.CellId.from_token(cell)
+        return tuple(str(kid.to_token()) for kid in cell_id.children())
 
     def area_m2(self, cell: CellId) -> float:
         """Return the exact cell area scaled to the planet radius."""
