@@ -95,8 +95,8 @@ def test_registry_toggle_builds_registered_backend() -> None:
     register_grid_backend("fake", _fake_factory)
     grid = create_grid("fake", resolution=2, radius_m=1_000.0)
     assert grid.backend_name == "fake"
-    assert grid.resolution == 2  # noqa: PLR2004 - value passed one line up
-    assert grid.radius_m == 1_000.0  # noqa: PLR2004 - value passed one line up
+    assert grid.resolution == 2
+    assert grid.radius_m == 1_000.0
 
 
 def test_registry_lists_builtin_and_registered_backends() -> None:

@@ -27,6 +27,9 @@ repos:
     rev: 1.7.0
     hooks:
       - id: interrogate
+        # Use pyproject paths/excludes (tests are exempt there, matching
+        # ruff's D ignore) instead of the staged-file list.
+        pass_filenames: false
 
   # --- Duplicate-code detection across Python + TypeScript ---
   # Runs via npx: the upstream repo is an npm monorepo whose root package does
