@@ -1,0 +1,112 @@
+"""Tests for the grid port contract and the backend toggle registry."""
+
+from __future__ import annotations
+
+import math
+from typing import TYPE_CHECKING
+
+import pytest
+
+from adapters.grid_registry import (
+    available_backends,
+    create_grid,
+    register_grid_backend,
+)
+from ports.grid import CellId, Grid, GridBackendUnavailableError, LatLon
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
+
+_FAKE_CELLS = ("c0", "c1", "c2", "c3")
+
+
+class FakeGrid(Grid):
+    """A four-cell tetrahedron-style grid used to exercise the port."""
+
+    def __init__(self, resolution: int, radius_m: float) -> None:
+        """Store the toggle parameters."""
+        self._resolution = resolution
+        self._radius_m = radius_m
+
+    @property
+    def backend_name(self) -> str:
+        """Return the toggle name of this backend."""
+        return "fake"
+
+    @property
+    def resolution(self) -> int:
+        """Return the configured resolution."""
+        return self._resolution
+
+    @property
+    def radius_m(self) -> float:
+        """Return the sphere radius in meters."""
+        return self._radius_m
+
+    @property
+    def cell_count(self) -> int:
+        """Return the number of cells."""
+        return len(_FAKE_CELLS)
+
+    def cells(self) -> Iterator[CellId]:
+        """Iterate the four cells."""
+        yield from _FAKE_CELLS
+
+    def neighbors(self, cell: CellId) -> Sequence[CellId]:
+        """Return every other cell (tetrahedron adjacency)."""
+        return tuple(other for other in _FAKE_CELLS if other != cell)
+
+    def area_m2(self, cell: CellId) -> float:
+        """Return an equal share of the sphere's surface."""
+        return 4.0 * math.pi * self._radius_m**2 / len(_FAKE_CELLS)
+
+    def centroid(self, cell: CellId) -> LatLon:
+        """Return an arbitrary but distinct centroid per cell."""
+        index = _FAKE_CELLS.index(cell)
+        return LatLon(lat_deg=float(-45 + 30 * index), lon_deg=float(90 * index))
+
+    def cell_at(self, point: LatLon) -> CellId:
+        """Return the first cell (adequate for port tests)."""
+        return _FAKE_CELLS[0]
+
+
+def _fake_factory(resolution: int, radius_m: float) -> Grid:
+    """Build a FakeGrid; registered under the 'fake' toggle name."""
+    return FakeGrid(resolution, radius_m)
+
+
+def test_registry_toggle_builds_registered_backend() -> None:
+    """A registered backend is constructed by its toggle name."""
+    register_grid_backend("fake", _fake_factory)
+    grid = create_grid("fake", resolution=2, radius_m=1_000.0)
+    assert grid.backend_name == "fake"
+    assert grid.resolution == 2  # noqa: PLR2004 - value passed one line up
+    assert grid.radius_m == 1_000.0  # noqa: PLR2004 - value passed one line up
+
+
+def test_registry_lists_builtin_and_registered_backends() -> None:
+    """The three built-in DGGS toggles and runtime additions are listed."""
+    register_grid_backend("fake", _fake_factory)
+    names = available_backends()
+    for expected in ("h3", "s2", "isea", "fake"):
+        assert expected in names
+
+
+def test_registry_rejects_unknown_backend() -> None:
+    """An unknown toggle name raises with the known names listed."""
+    with pytest.raises(ValueError, match="unknown grid backend"):
+        create_grid("square-lattice", resolution=1)
+
+
+def test_isea_backend_reports_unavailable() -> None:
+    """The equal-area ISEA backend is a known toggle but not yet wired."""
+    with pytest.raises(GridBackendUnavailableError, match="isea"):
+        create_grid("isea", resolution=1)
+
+
+def test_total_area_matches_sphere() -> None:
+    """Cell areas sum to the full sphere surface for the planet radius."""
+    radius_m = 2_500.0
+    grid = FakeGrid(0, radius_m)
+    expected = 4.0 * math.pi * radius_m**2
+    assert grid.total_area_m2() == pytest.approx(expected)
