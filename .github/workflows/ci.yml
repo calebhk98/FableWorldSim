@@ -24,24 +24,30 @@ jobs:
       - name: Set up Python
         run: uv python install ${{ matrix.python-version }}
 
+      # Install into a project venv (never --system: CI runners have an
+      # externally-managed system Python). uv run then uses that venv.
       - name: Install project + dev tooling
-        run: uv pip install --system -e ".[dev]"
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
 
       - name: Lint + format (ruff)
         run: |
-          ruff check .
-          ruff format --check .
+          uv run ruff check .
+          uv run ruff format --check .
 
       - name: Type-check (mypy)
-        run: mypy
+        run: uv run mypy
 
       - name: Docstring coverage (interrogate)
-        run: interrogate -c pyproject.toml .
+        run: uv run interrogate -c pyproject.toml .
 
+      # bash on both OSes (Git bash on Windows) so git ls-files word-splits.
       - name: Custom discipline hooks
+        shell: bash
         run: |
-          python tools/hooks/check_file_length.py $(git ls-files '*.py')
-          python tools/hooks/check_port_boundary.py $(git ls-files '*.py')
+          uv run python tools/hooks/check_file_length.py $(git ls-files '*.py')
+          uv run python tools/hooks/check_port_boundary.py $(git ls-files '*.py')
 
       - name: Tests
-        run: pytest
+        run: uv run pytest

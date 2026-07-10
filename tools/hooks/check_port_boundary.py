@@ -44,11 +44,7 @@ def _violations(path: str) -> list[str]:
         return []
     with open(path, encoding="utf-8") as handle:
         tree = ast.parse(handle.read(), filename=path)
-    return [
-        name
-        for name in _imported_names(tree)
-        if name.split(".")[0] in FORBIDDEN_PREFIXES
-    ]
+    return [name for name in _imported_names(tree) if name.split(".")[0] in FORBIDDEN_PREFIXES]
 
 
 def main(paths: list[str]) -> int:
