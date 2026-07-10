@@ -37,9 +37,15 @@ api = ["fastapi>=0.110", "uvicorn>=0.29", "websockets>=12", "fluent.runtime>=0.4
 storage = ["pyarrow>=15", "zarr>=2.17"]
 
 # --- Developer tooling ---
+# Pulls in the api + wheel-friendly grid extras so the full test suite
+# (cross-backend conservation, API surface) actually runs in CI instead of
+# skipping. GPU extras stay out: CI runners have no CUDA, and jax wheels are
+# not dependable on Windows (the primary platform) — those tests skip cleanly.
 dev = [
+  "fableworldsim[api,grid-h3,grid-s2]",
   "pytest>=8.1",
   "hypothesis>=6.100",
+  "httpx>=0.27",                        # FastAPI TestClient transport
   "ruff>=0.4",
   "mypy>=1.9",
   "pre-commit>=3.7",
@@ -86,6 +92,9 @@ python_version = "3.11"
 strict = true
 mypy_path = "adapters/stubs"
 files = ["core", "ports", "adapters", "api"]
+# The stubs are import targets (via mypy_path), not sources to crawl;
+# without this exclude mypy maps each .pyi twice and errors out.
+exclude = "adapters/stubs/"
 
 # ---------------------------------------------------------------------------
 # Tests

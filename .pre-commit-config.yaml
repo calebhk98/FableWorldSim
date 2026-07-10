@@ -2,8 +2,10 @@
 # See docs/CONTRIBUTING.md for the red->green TDD workflow these support.
 repos:
   # --- Format + lint (includes never-nesting PLR1702, complexity C901, docstrings D) ---
+  # Keep this rev in the same minor line as the ruff pin in pyproject dev
+  # deps, or the local hook and CI will disagree about rules.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.10
+    rev: v0.15.9
     hooks:
       - id: ruff
         args: [--fix]
@@ -14,7 +16,10 @@ repos:
     rev: v1.10.0
     hooks:
       - id: mypy
-        additional_dependencies: [pydantic>=2.6, numpy>=1.26]
+        # Everything `files = [core, ports, adapters, api]` imports statically;
+        # optional grid/GPU libs are covered by the stubs in adapters/stubs/.
+        additional_dependencies:
+          [pydantic>=2.6, numpy>=1.26, pydantic-settings>=2.2, fastapi>=0.110]
         pass_filenames: false
 
   # --- Docstring coverage (good-commenting requirement) ---
@@ -24,11 +29,18 @@ repos:
       - id: interrogate
 
   # --- Duplicate-code detection across Python + TypeScript ---
-  - repo: https://github.com/kucherenko/jscpd
-    rev: v4.0.5
+  # Runs via npx: the upstream repo is an npm monorepo whose root package does
+  # not expose the jscpd bin, so pre-commit's node install can't provide it
+  # (the old pinned rev v4.0.5 never existed at all). Requires node, which the
+  # TypeScript web client needs anyway.
+  - repo: local
     hooks:
       - id: jscpd
-        args: ["--threshold", "0", "--min-tokens", "50", "core", "ports", "adapters", "api"]
+        name: Check for duplicated code
+        entry: npx --yes jscpd@4 --threshold 0 --min-tokens 50 --exitCode 1 core ports adapters api
+        language: system
+        always_run: true
+        pass_filenames: false
 
   # --- Project-local guards (see tools/hooks) ---
   - repo: local
@@ -43,3 +55,9 @@ repos:
         entry: python tools/hooks/check_port_boundary.py
         language: system
         types: [python]
+      - id: single-source-of-truth
+        name: content ids defined once (locales reference them, core never hard-codes them)
+        entry: python tools/hooks/check_single_source.py
+        language: system
+        always_run: true
+        pass_filenames: false

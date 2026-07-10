@@ -29,8 +29,20 @@ axial_tilt_deg = 23.44
 rotation_rate = 1.0     # signed; 0 or "tidally_locked" supported later
 water_fraction = 0.71   # first-class dial; reconciled with the sea-level threshold
 
+[kernels]
+# Hot-kernel implementation selection (the 15-minute-swap toggle).
+# "auto" = best available (native C where a compiler exists, else the
+# pure-Python reference); explicit names pin one implementation.
+flow_accumulation = "auto"   # one of: auto | python | c
+
 [i18n]
 locale = "en"           # add locales under content/locales/<lang>.ftl
+
+[mods]
+# Extra content roots overlaying the base content, applied in list order
+# (later wins). Installed mod packages are discovered automatically via the
+# "fableworldsim.mods" entry-point group and load between base and these.
+paths = []
 
 [api]
 enabled = true
