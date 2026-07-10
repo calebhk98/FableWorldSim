@@ -1,0 +1,6 @@
+# Flight — aircraft shrink the water-crossing cost again (stacking with the
+# naval line) and double supply reach.  Display name: techs-flight.
+cost = 320
+prerequisites = ["industry"]
+water_cost = 0.1
+supply_range = 2.0

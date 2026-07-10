@@ -1,0 +1,6 @@
+# Grain — farmland: managed plant biomass that renews while the underlying
+# biology holds.  Feeds population growth and the research surplus.
+# Display name: resources-grain.
+mode = "farmland"
+harvest_fraction_per_year = 0.05
+feeds_population = true

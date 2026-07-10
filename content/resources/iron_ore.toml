@@ -1,0 +1,8 @@
+# Iron ore — a finite mine resource: deposits deplete and run out.  Feeds
+# the arms multiplier in frontier contests and gates ironworking/industry.
+# Display name: resources-iron_ore.
+mode = "mine"
+subsurface = true
+deposit_fraction = 0.08
+deposit_stock = 20000
+arms_value = 1.0

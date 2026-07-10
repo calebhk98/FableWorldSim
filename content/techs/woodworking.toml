@@ -1,0 +1,4 @@
+# Woodworking — better tools for felling and shaping timber; prerequisite
+# for anything that floats.  Display name: techs-woodworking.
+cost = 10
+extraction = 1.2

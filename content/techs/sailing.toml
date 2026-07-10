@@ -1,0 +1,6 @@
+# Sailing — boats cut the water-crossing terrain cost to a quarter, opening
+# coastal seas to influence and supply lines.  This multiplier IS the naval
+# mechanic: no code special-cases the tech.  Display name: techs-sailing.
+cost = 30
+prerequisites = ["woodworking"]
+water_cost = 0.25

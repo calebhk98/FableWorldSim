@@ -1,0 +1,18 @@
+# Elves — a slow-growing, long-lived surface race with a scholarly bent
+# and deep woodcraft; they dislike tunnels and distrust the open sea.
+# Display name is the Fluent key species-elf in content/locales.
+sapient = true
+domain = "surface"
+growth_rate_per_year = 0.012
+commit_fraction = 0.08
+research_aptitude = 1.3
+mine_affinity = 0.8
+color = "#5FA05A"
+toponym_prefixes = ["Sil", "Aur", "Elen", "Loth", "Gal", "Nim"]
+toponym_suffixes = ["driel", "lorien", "wen", "thil", "las", "onde"]
+
+[propensity]
+woodworking = 2.0
+mathematics = 1.4
+sailing = 0.7
+mining = 0.6

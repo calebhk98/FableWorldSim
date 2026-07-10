@@ -19,3 +19,26 @@ biomes-tropical_desert = Tropical Desert
 biomes-tropical_dry_forest = Tropical Dry Forest
 biomes-tropical_moist_forest = Tropical Moist Forest
 biomes-tropical_rainforest = Tropical Rainforest
+
+# Sapient species display names. One key per species id.
+species-human = Humans
+species-elf = Elves
+species-dwarf = Dwarves
+
+# Technology display names. One key per tech id.
+techs-agriculture = Agriculture
+techs-woodworking = Woodworking
+techs-mining = Mining
+techs-sailing = Sailing
+techs-mathematics = Mathematics
+techs-shipbuilding = Shipbuilding
+techs-ironworking = Ironworking
+techs-engineering = Engineering
+techs-industry = Industry
+techs-flight = Flight
+
+# Resource display names. One key per resource id.
+resources-iron_ore = Iron Ore
+resources-coal = Coal
+resources-timber = Timber
+resources-grain = Grain

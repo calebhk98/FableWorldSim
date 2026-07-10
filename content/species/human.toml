@@ -1,0 +1,18 @@
+# Humans — the baseline sapient surface race: fast growth, balanced
+# research, and a cultural pull toward farming and the sea.  Display name
+# is the Fluent key species-human in content/locales.
+sapient = true
+domain = "surface"
+growth_rate_per_year = 0.025
+commit_fraction = 0.12
+research_aptitude = 1.0
+mine_affinity = 1.0
+color = "#C08A52"
+toponym_prefixes = ["Ash", "Bright", "Stone", "River", "Fair", "Oak"]
+toponym_suffixes = ["ford", "ton", "burgh", "dale", "haven", "mere"]
+
+# Per-tech research propensity weights (unlisted techs default to 1.0).
+[propensity]
+agriculture = 1.4
+sailing = 1.5
+shipbuilding = 1.3

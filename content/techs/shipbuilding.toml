@@ -1,0 +1,7 @@
+# Shipbuilding — true ships stack with sailing (0.25 x 0.4 = 0.1 water
+# cost) and stretch supply lines across the sea.
+# Display name: techs-shipbuilding.
+cost = 70
+prerequisites = ["sailing", "mathematics"]
+water_cost = 0.4
+supply_range = 1.3

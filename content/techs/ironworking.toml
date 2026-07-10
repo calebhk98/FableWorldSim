@@ -1,0 +1,7 @@
+# Ironworking — weapons and tools of iron; unreachable without an iron
+# deposit inside the civ's borders (environmental gating).
+# Display name: techs-ironworking.
+cost = 60
+prerequisites = ["mining"]
+requires_resources = ["iron_ore"]
+strength = 1.5
