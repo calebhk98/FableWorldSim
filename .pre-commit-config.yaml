@@ -1,0 +1,45 @@
+# Discipline gates run on every local commit and re-run identically in CI.
+# See docs/CONTRIBUTING.md for the red->green TDD workflow these support.
+repos:
+  # --- Format + lint (includes never-nesting PLR1702, complexity C901, docstrings D) ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # --- Static types ---
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [pydantic>=2.6, numpy>=1.26]
+        pass_filenames: false
+
+  # --- Docstring coverage (good-commenting requirement) ---
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.7.0
+    hooks:
+      - id: interrogate
+
+  # --- Duplicate-code detection across Python + TypeScript ---
+  - repo: https://github.com/kucherenko/jscpd
+    rev: v4.0.5
+    hooks:
+      - id: jscpd
+        args: ["--threshold", "0", "--min-tokens", "50", "core", "ports", "adapters", "api"]
+
+  # --- Project-local guards (see tools/hooks) ---
+  - repo: local
+    hooks:
+      - id: file-length
+        name: file length limit
+        entry: python tools/hooks/check_file_length.py
+        language: system
+        types: [python]
+      - id: port-boundary
+        name: core imports ports only
+        entry: python tools/hooks/check_port_boundary.py
+        language: system
+        types: [python]

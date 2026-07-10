@@ -1,0 +1,103 @@
+# FableWorldSim — project + tooling configuration.
+# The simulation core is pure Python and depends on PORTS only; concrete libraries
+# (grids, GPU compute, storage) are optional extras so a minimal install stays light
+# and any adapter can be swapped without touching the core. See docs/ARCHITECTURE.md.
+
+[project]
+name = "fableworldsim"
+version = "0.0.0"
+description = "A headless, API-first 3D-globe world simulator on an equal-area discrete global grid."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "TBD" }
+
+# Base install is deliberately tiny. Everything heavy is an optional extra below,
+# so the same codebase runs on a 4 GB no-GPU laptop or a dual-GPU workstation.
+dependencies = [
+  "numpy>=1.26",
+  "pydantic>=2.6",
+  "pydantic-settings>=2.2",
+]
+
+[project.optional-dependencies]
+# --- Grid backends (toggle via config; H3 is the frictionless default) ---
+grid-h3 = ["h3>=4.1"]
+grid-isea = ["dggrid4py>=0.3"]          # shells out to the native DGGRID binary
+grid-s2 = ["s2sphere>=0.2"]             # NOTE: upstream unmaintained; interop only
+
+# --- Compute backends (auto-detected at runtime) ---
+gpu = ["cupy-cuda12x>=13"]              # single/multi-GPU
+jax = ["jax>=0.4"]                      # functional backend; multi-device sharding
+cluster = ["dask>=2024.1", "distributed>=2024.1"]
+
+# --- API server + web-facing bits ---
+api = ["fastapi>=0.110", "uvicorn>=0.29", "websockets>=12", "fluent.runtime>=0.4"]
+
+# --- Storage backends ---
+storage = ["pyarrow>=15", "zarr>=2.17"]
+
+# --- Developer tooling ---
+dev = [
+  "pytest>=8.1",
+  "hypothesis>=6.100",
+  "ruff>=0.4",
+  "mypy>=1.9",
+  "pre-commit>=3.7",
+  "interrogate>=1.7",                   # docstring-coverage gate
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["core", "ports", "adapters", "api"]
+
+# ---------------------------------------------------------------------------
+# Lint / format — ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# D = docstring style (good-commenting requirement); C901 = complexity;
+# PLR1702 = too-many-nested-blocks ("never nesting"); the rest are correctness/clarity.
+select = ["E", "F", "W", "I", "N", "UP", "B", "C90", "D", "PL", "RUF"]
+ignore = ["D203", "D213"]               # resolve conflicting docstring rules
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-nested-blocks = 3                    # enforce early-returns / flat code
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]                        # tests need not be docstring-complete
+
+# ---------------------------------------------------------------------------
+# Types — mypy (strict on core + ports; adapters typed against port signatures)
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "adapters/stubs"
+files = ["core", "ports", "adapters", "api"]
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
+
+# ---------------------------------------------------------------------------
+# Docstring coverage
+# ---------------------------------------------------------------------------
+[tool.interrogate]
+fail-under = 90
+exclude = ["tests", "docs", "clients"]
+ignore-init-module = true

@@ -1,0 +1,47 @@
+# CI mirrors the local pre-commit gates and the test suite.
+# Windows is listed first because it is the primary target platform.
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python-version: ["3.11"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install project + dev tooling
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Lint + format (ruff)
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Type-check (mypy)
+        run: mypy
+
+      - name: Docstring coverage (interrogate)
+        run: interrogate -c pyproject.toml .
+
+      - name: Custom discipline hooks
+        run: |
+          python tools/hooks/check_file_length.py $(git ls-files '*.py')
+          python tools/hooks/check_port_boundary.py $(git ls-files '*.py')
+
+      - name: Tests
+        run: pytest
