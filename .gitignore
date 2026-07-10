@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# uv
+uv.lock
+
+# Node (web client)
+node_modules/
+clients/web/dist/
+
+# Simulation output (never commit generated worlds)
+*.world
+*.snapshot
+/runs/
+/output/
+
+# Native / DGGRID build artifacts
+*.so
+*.dll
+*.dylib
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store

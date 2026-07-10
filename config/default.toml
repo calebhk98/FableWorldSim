@@ -1,0 +1,38 @@
+# Default configuration — the single source of truth for all options.
+# Every value here is also settable via the API and the in-sim UI; this file
+# only provides the defaults. See docs/ARCHITECTURE.md for the three control surfaces.
+#
+# This is a SKELETON: it documents the intended option surface. Sections are
+# filled in as each layer is implemented.
+
+[grid]
+# Discrete global grid backend. "h3" is the frictionless default (pure-Python
+# wheels everywhere); "isea" is opt-in for strict equal-area cells (needs the
+# native DGGRID binary); "s2" is display/interop only.
+backend = "h3"          # one of: h3 | isea | s2
+resolution = 3          # coarse by default; raised per hardware/fidelity
+
+[compute]
+# Array/compute backend. "auto" probes the host (GPU count/VRAM, CPU cores, RAM)
+# and uses all of it; override to force a specific path.
+backend = "auto"        # one of: auto | numpy | cupy | jax | dask
+gpus = "all"            # "all" | integer count | list of device indices
+cpu_workers = "all"     # "all" | integer count
+
+[fidelity]
+# The single accuracy<->speed dial (grid resolution x timestep x model detail).
+level = "balanced"      # one of: fast | balanced | accurate
+
+[planet]
+# PlanetConfig — see docs/PLAN.md. Placeholder defaults (Earth-like).
+axial_tilt_deg = 23.44
+rotation_rate = 1.0     # signed; 0 or "tidally_locked" supported later
+water_fraction = 0.71   # first-class dial; reconciled with the sea-level threshold
+
+[i18n]
+locale = "en"           # add locales under content/locales/<lang>.ftl
+
+[api]
+enabled = true
+host = "127.0.0.1"
+port = 8080
