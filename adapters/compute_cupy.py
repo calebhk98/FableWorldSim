@@ -1,9 +1,15 @@
-"""cupy compute adapter: numpy-compatible arrays on NVIDIA GPUs."""
+"""cupy compute adapter: numpy-compatible arrays on NVIDIA GPUs.
+
+Imported statically (typed via ``adapters/stubs/cupy.pyi``); the compute
+registry converts an ImportError into a backend-unavailable error with
+an install hint (``pip install 'fableworldsim[gpu]'``).
+"""
 
 from __future__ import annotations
 
-from importlib import import_module
 from typing import Any
+
+import cupy
 
 from ports.array_backend import ArrayBackend, ComputeBackendUnavailableError
 
@@ -12,14 +18,9 @@ class CupyBackend(ArrayBackend):
     """Array math on the GPU via cupy (tracks the numpy API closely)."""
 
     def __init__(self) -> None:
-        """Import cupy lazily and verify a GPU is actually usable."""
+        """Verify a CUDA device is actually usable, not just installed."""
         try:
-            self._cp = import_module("cupy")
-        except ImportError as exc:
-            msg = "compute backend 'cupy' needs cupy: pip install cupy-cuda12x"
-            raise ComputeBackendUnavailableError(msg) from exc
-        try:
-            self._cp.cuda.runtime.getDeviceCount()
+            cupy.cuda.runtime.getDeviceCount()
         except Exception as exc:
             msg = "cupy is installed but no usable CUDA device was found"
             raise ComputeBackendUnavailableError(msg) from exc
@@ -36,12 +37,12 @@ class CupyBackend(ArrayBackend):
 
     @property
     def supports_inplace_mutation(self) -> bool:
-        """Cupy arrays are mutable in place, like numpy."""
+        """Return True: cupy arrays are mutable in place, like numpy."""
         return True
 
     def namespace(self) -> Any:
         """Return the cupy module as the Array-API namespace."""
-        return self._cp
+        return cupy
 
 
 def create() -> ArrayBackend:

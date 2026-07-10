@@ -32,6 +32,12 @@ water_fraction = 0.71   # first-class dial; reconciled with the sea-level thresh
 [i18n]
 locale = "en"           # add locales under content/locales/<lang>.ftl
 
+[mods]
+# Extra content roots overlaying the base content, applied in list order
+# (later wins). Installed mod packages are discovered automatically via the
+# "fableworldsim.mods" entry-point group and load between base and these.
+paths = []
+
 [api]
 enabled = true
 host = "127.0.0.1"

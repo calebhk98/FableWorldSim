@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from importlib import import_module
 
-from ports.grid import EARTH_MEAN_RADIUS_M, Grid
+from ports.grid import EARTH_MEAN_RADIUS_M, Grid, GridBackendUnavailableError
 
 GridFactory = Callable[[int, float], Grid]
 """Factory signature: ``(resolution, radius_m) -> Grid``."""
@@ -25,6 +25,12 @@ _BUILTIN_MODULES: dict[str, str] = {
     "h3": "adapters.grid_h3",
     "s2": "adapters.grid_s2",
     "isea": "adapters.grid_isea",
+}
+
+_INSTALL_EXTRAS: dict[str, str] = {
+    "h3": "grid-h3",
+    "s2": "grid-s2",
+    "isea": "grid-isea",
 }
 
 _registry: dict[str, GridFactory] = {}
@@ -55,7 +61,15 @@ def create_grid(
     key = backend.lower()
     factory = _registry.get(key)
     if factory is None and key in _BUILTIN_MODULES:
-        module = import_module(_BUILTIN_MODULES[key])
+        try:
+            module = import_module(_BUILTIN_MODULES[key])
+        except ImportError as exc:
+            extra = _INSTALL_EXTRAS[key]
+            msg = (
+                f"grid backend {key!r} needs its optional dependency: "
+                f"pip install 'fableworldsim[{extra}]'"
+            )
+            raise GridBackendUnavailableError(msg) from exc
         factory = module.create
         _registry[key] = factory
     if factory is None:

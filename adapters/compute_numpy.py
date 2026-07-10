@@ -1,23 +1,20 @@
-"""numpy compute adapter: the CPU default, available everywhere."""
+"""numpy compute adapter: the CPU default, available everywhere.
+
+numpy is a base dependency, so this import cannot fail in a supported
+install; the registry still converts ImportError uniformly for safety.
+"""
 
 from __future__ import annotations
 
-from importlib import import_module
 from typing import Any
 
-from ports.array_backend import ArrayBackend, ComputeBackendUnavailableError
+import numpy
+
+from ports.array_backend import ArrayBackend
 
 
 class NumpyBackend(ArrayBackend):
     """Array math on the CPU via numpy."""
-
-    def __init__(self) -> None:
-        """Import numpy lazily so the core never hard-depends on it."""
-        try:
-            self._np = import_module("numpy")
-        except ImportError as exc:
-            msg = "compute backend 'numpy' needs numpy: pip install numpy"
-            raise ComputeBackendUnavailableError(msg) from exc
 
     @property
     def name(self) -> str:
@@ -31,12 +28,12 @@ class NumpyBackend(ArrayBackend):
 
     @property
     def supports_inplace_mutation(self) -> bool:
-        """Numpy arrays are mutable in place."""
+        """Return True: numpy arrays are mutable in place."""
         return True
 
     def namespace(self) -> Any:
         """Return the numpy module as the Array-API namespace."""
-        return self._np
+        return numpy
 
 
 def create() -> ArrayBackend:
