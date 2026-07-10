@@ -1,0 +1,10 @@
+# Industry — the industrial revolution.  Gated on accessible coal AND iron:
+# a resource-poor or isolated civ (a "Rome without an industrial
+# revolution") stalls here, exactly as its context dictates.
+# Display name: techs-industry.
+cost = 160
+prerequisites = ["engineering"]
+requires_resources = ["coal", "iron_ore"]
+extraction = 2.0
+research = 1.5
+strength = 1.5

@@ -1,0 +1,4 @@
+# Agriculture — managed crops raise farm yields and the land's carrying
+# capacity.  Root of the food branch.  Display name: techs-agriculture.
+cost = 10
+farm_yield = 1.5

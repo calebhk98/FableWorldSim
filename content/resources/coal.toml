@@ -1,0 +1,6 @@
+# Coal — a finite mine resource that gates the industrial revolution; no
+# accessible coal, no industry.  Display name: resources-coal.
+mode = "mine"
+subsurface = true
+deposit_fraction = 0.10
+deposit_stock = 30000

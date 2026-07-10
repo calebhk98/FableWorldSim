@@ -1,0 +1,4 @@
+# Mining — organized digging speeds up extraction from finite deposits.
+# Display name: techs-mining.
+cost = 15
+extraction = 1.4

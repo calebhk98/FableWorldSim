@@ -1,0 +1,19 @@
+# Dwarves — a subterranean race living in the SubsurfaceGrid domain, so
+# they can share planet columns with surface races without contesting
+# them.  Their subsurface affinity makes mines run rich; boats are for
+# other folk.  Display name is the Fluent key species-dwarf.
+sapient = true
+domain = "subsurface"
+growth_rate_per_year = 0.015
+commit_fraction = 0.15
+research_aptitude = 1.0
+mine_affinity = 1.8
+color = "#8A6E9E"
+toponym_prefixes = ["Khaz", "Bar", "Grim", "Thorin", "Dur", "Kara"]
+toponym_suffixes = ["dun", "zad", "heim", "forge", "delve", "grond"]
+
+[propensity]
+mining = 2.5
+ironworking = 2.0
+engineering = 1.5
+sailing = 0.2

@@ -1,0 +1,7 @@
+# Timber — forestry: renewable, but harvesting removes standing plant
+# biomass from the SAME field the food web grazes, so clear-cutting a
+# forest starves the deer.  Over-harvest outruns regrowth.
+# Display name: resources-timber.
+mode = "forestry"
+harvest_fraction_per_year = 0.03
+arms_value = 0.2
