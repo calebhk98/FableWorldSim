@@ -1,0 +1,9 @@
+# Tropical Rainforest — a Holdridge life zone. Belt 6-6, humidity province
+# 5-5 on the chart (0 polar/arid .. high tropical/rain). Display
+# name is the Fluent key biomes-tropical_rainforest in content/locales.
+belt_min = 6
+belt_max = 6
+province_min = 5
+province_max = 5
+vegetation_density = 1.0
+color = "#157A45"

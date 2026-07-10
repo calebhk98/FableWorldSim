@@ -1,0 +1,9 @@
+# Polar Desert — a Holdridge life zone. Belt 0-0, humidity province
+# 0-5 on the chart (0 polar/arid .. high tropical/rain). Display
+# name is the Fluent key biomes-polar_desert in content/locales.
+belt_min = 0
+belt_max = 0
+province_min = 0
+province_max = 5
+vegetation_density = 0.02
+color = "#E8E8F0"

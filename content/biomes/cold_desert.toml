@@ -1,0 +1,9 @@
+# Cold Desert — a Holdridge life zone. Belt 2-2, humidity province
+# 0-1 on the chart (0 polar/arid .. high tropical/rain). Display
+# name is the Fluent key biomes-cold_desert in content/locales.
+belt_min = 2
+belt_max = 2
+province_min = 0
+province_max = 1
+vegetation_density = 0.05
+color = "#C9BFA0"

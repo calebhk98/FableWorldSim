@@ -1,0 +1,9 @@
+# Tropical Desert — a Holdridge life zone. Belt 6-6, humidity province
+# 0-0 on the chart (0 polar/arid .. high tropical/rain). Display
+# name is the Fluent key biomes-tropical_desert in content/locales.
+belt_min = 6
+belt_max = 6
+province_min = 0
+province_max = 0
+vegetation_density = 0.04
+color = "#E89A4C"

@@ -1,0 +1,9 @@
+# Tropical Moist Forest — a Holdridge life zone. Belt 6-6, humidity province
+# 4-4 on the chart (0 polar/arid .. high tropical/rain). Display
+# name is the Fluent key biomes-tropical_moist_forest in content/locales.
+belt_min = 6
+belt_max = 6
+province_min = 4
+province_max = 4
+vegetation_density = 0.88
+color = "#37955A"

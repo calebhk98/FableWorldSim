@@ -1,0 +1,9 @@
+# Tundra — a Holdridge life zone. Belt 1-1, humidity province
+# 0-5 on the chart (0 polar/arid .. high tropical/rain). Display
+# name is the Fluent key biomes-tundra in content/locales.
+belt_min = 1
+belt_max = 1
+province_min = 0
+province_max = 5
+vegetation_density = 0.2
+color = "#B7C4B0"

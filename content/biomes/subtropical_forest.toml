@@ -1,0 +1,9 @@
+# Subtropical Forest — a Holdridge life zone. Belt 5-5, humidity province
+# 3-4 on the chart (0 polar/arid .. high tropical/rain). Display
+# name is the Fluent key biomes-subtropical_forest in content/locales.
+belt_min = 5
+belt_max = 5
+province_min = 3
+province_max = 4
+vegetation_density = 0.82
+color = "#5AA05E"
