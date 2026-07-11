@@ -10,11 +10,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.topography.edit import (
-    EDIT_EVENT_KIND,
     MAX_DELTA_PER_CALL_M,
     EditRejectedError,
     EditRequest,
     _validate,
+    log_edit,
 )
 from ports.topography import TopographySource
 
@@ -128,13 +128,4 @@ class EditableTopography(TopographySource):
         for cell, delta in request.deltas_m.items():
             self._edits[cell] = self._edits.get(cell, 0.0) + delta
         if self._chronicle is not None:
-            self._chronicle.append(
-                tick=tick,
-                kind=EDIT_EVENT_KIND,
-                subject=request.editor,
-                payload={
-                    "cells": len(request.deltas_m),
-                    "max_abs_delta_m": max(abs(d) for d in request.deltas_m.values()),
-                    "reason": request.reason,
-                },
-            )
+            log_edit(self._chronicle, tick, request)

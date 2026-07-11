@@ -108,6 +108,17 @@ def apply_edit(
     edited = dict(heights)
     for cell, delta in request.deltas_m.items():
         edited[cell] += delta
+    log_edit(chronicle, tick, request)
+    return edited
+
+
+def log_edit(chronicle: Chronicle, tick: int, request: EditRequest) -> None:
+    """Append one chronicle event describing an applied terrain edit.
+
+    Shared by :func:`apply_edit` and the ``EditableTopography`` source so
+    every terrain change is traced the same way (editor, cell count, peak
+    delta, reason) from a single place.
+    """
     chronicle.append(
         tick=tick,
         kind=EDIT_EVENT_KIND,
@@ -118,4 +129,3 @@ def apply_edit(
             "reason": request.reason,
         },
     )
-    return edited
