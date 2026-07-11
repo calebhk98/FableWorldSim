@@ -16,10 +16,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from adapters.kernels_python import flow_accumulation
+from core.hydrology.lake_rivers import lake_aware_receivers
 from core.hydrology.lakes import (
     build_lake_network,
     fill_depressions,
-    lake_aware_receivers,
 )
 from core.hydrology.rivers import NO_RECEIVER, steepest_descent_receivers
 from core.hydrology.sea_mask import SeaMask

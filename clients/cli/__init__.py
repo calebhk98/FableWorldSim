@@ -3,4 +3,4 @@
 from clients.cli.client import APIClient
 from clients.cli.main import CLI, main
 
-__all__ = ["APIClient", "CLI", "main"]
+__all__ = ["CLI", "APIClient", "main"]

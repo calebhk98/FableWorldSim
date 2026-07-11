@@ -27,6 +27,7 @@ from api.commands import (
     apply_setting,
     build_default_registry,
 )
+from api.scenario_commands import scenario_summaries
 from api.settings import Settings, get_setting, load_settings, setting_paths
 from api.state import AppState, EventBus
 from api.ws_events import HelloEvent, ws_schema
@@ -139,19 +140,7 @@ def _register_discovery(app: FastAPI, state: AppState, registry: CommandRegistry
     @app.get("/scenarios")
     def scenarios() -> dict[str, Any]:
         """List available scenario presets (earth, mars, venus, luna, etc.)."""
-        from api.world_service import get_all_presets
-
-        presets = get_all_presets()
-        result = []
-        for name, (config, description) in presets.items():
-            result.append(
-                {
-                    "name": name,
-                    "description": description,
-                    "planet_name": config.name,
-                }
-            )
-        return {"scenarios": result}
+        return {"scenarios": scenario_summaries()}
 
     @app.post("/commands/{name}")
     def run_command(

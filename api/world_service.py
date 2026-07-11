@@ -241,9 +241,7 @@ def deepen_seed(
         species_id: sum(field.values())
         for species_id, field in state.biology.surface_populations.items()
     }
-    civ_population = {
-        civ.civ_id: civ_population_total(world.grid, civ) for civ in state.civ.civs
-    }
+    civ_population = {civ.civ_id: civ_population_total(world.grid, civ) for civ in state.civ.civs}
     return {
         "seed": seed,
         "channel_count": channel_count,
@@ -260,7 +258,7 @@ def _seeds(base_seed: int, count: int) -> list[int]:
     return [base_seed + offset for offset in range(count)]
 
 
-def run_world_sweep(
+def run_world_sweep(  # noqa: PLR0913 - one keyword param per sweep knob
     *,
     base_seed: int = 1,
     count: int = 6,

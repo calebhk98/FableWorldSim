@@ -40,7 +40,7 @@ def test_get_all_presets_returns_seven_presets() -> None:
 def test_each_preset_has_config_and_description() -> None:
     """Each preset entry is a (PlanetConfig, description) tuple."""
     presets = get_all_presets()
-    for name, (config, description) in presets.items():
+    for _name, (config, description) in presets.items():
         assert hasattr(config, "name")
         assert hasattr(config, "radius_m")
         assert isinstance(description, str)

@@ -81,14 +81,19 @@ class CLI:
                 sweep_result = result["result"]
                 ranked = sweep_result["ranked"]
                 selected = sweep_result["selected"]
-                print(f"Sweep complete: {len(ranked)} worlds ranked, {len(selected)} selected for deep-sim")
+                print(
+                    f"Sweep complete: {len(ranked)} worlds ranked, "
+                    f"{len(selected)} selected for deep-sim"
+                )
                 for entry in ranked[:5]:
                     print(f"  Seed {entry['seed']}: score={entry['score']:.4f}")
                 print("\nDeepened seeds:", selected)
                 if selected and str(selected[0]) in sweep_result["deepened"]:
                     deep = sweep_result["deepened"][str(selected[0])]
-                    print(f"  Top winner: {deep.get('channel_count', 'N/A')} rivers, "
-                          f"{deep.get('surviving_species', 0)} species survived")
+                    print(
+                        f"  Top winner: {deep.get('channel_count', 'N/A')} rivers, "
+                        f"{deep.get('surviving_species', 0)} species survived"
+                    )
         except Exception as e:
             fatal(f"world sweep failed: {e}")
 
@@ -139,9 +144,7 @@ class CLI:
             fatal(f"config set failed: {e}")
 
     @staticmethod
-    def _print_settings_tree(
-        obj: dict[str, Any], prefix: str = "", indent: str = "  "
-    ) -> None:
+    def _print_settings_tree(obj: dict[str, Any], prefix: str = "", indent: str = "  ") -> None:
         """Recursively print a settings tree."""
         for key, value in sorted(obj.items()):
             path = f"{prefix}.{key}" if prefix else key
@@ -238,7 +241,7 @@ class CLI:
             fatal(f"metrics fetch failed: {e}")
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:  # noqa: C901, PLR0912, PLR0915 - argparse dispatcher
     """Main entry point: parse args and dispatch."""
     parser = argparse.ArgumentParser(
         description="Scriptable CLI for FableWorldSim (HTTP API client, no GUI)"
@@ -262,7 +265,9 @@ def main(argv: list[str] | None = None) -> int:
     sweep.add_argument("--base-seed", type=int, default=1, help="First seed to sweep from")
     sweep.add_argument("--count", type=int, default=6, help="How many worlds to generate")
     sweep.add_argument("--keep-top-k", type=int, default=2, help="How many top worlds to deep-sim")
-    sweep.add_argument("--resolution", type=int, default=1, help="Grid resolution (coarser = faster)")
+    sweep.add_argument(
+        "--resolution", type=int, default=1, help="Grid resolution (coarser = faster)"
+    )
     sweep.add_argument("--deep-ticks", type=int, default=5, help="Biology ticks for deep-sim")
 
     # Configuration

@@ -162,10 +162,10 @@ class TestCLIMainEntryPoint:
 
     def test_main_returns_int(self) -> None:
         """Test that main() returns an integer exit code."""
-        from clients.cli.main import main
-
         # Call with a valid command (in mock form)
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
+        from clients.cli.main import main
 
         with patch("clients.cli.main.APIClient"):
             mock_cli = MagicMock()

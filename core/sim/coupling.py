@@ -78,7 +78,7 @@ def _drawdown(before: dict[CellId, float], after: dict[CellId, float]) -> dict[C
     return {cell: max(0.0, value - after.get(cell, 0.0)) for cell, value in before.items()}
 
 
-def step_coupled(
+def step_coupled(  # noqa: PLR0913 - one param per coupled-layer input
     state: WorldState,
     ctx: CoupledContext,
     civ_rng: Rng,
@@ -137,6 +137,4 @@ class CoupledProcess:
 
     def step(self, state: WorldState, dt_s: float) -> WorldState:
         """Advance both layers by one orchestrator step."""
-        return step_coupled(
-            state, self._ctx, self._civ_rng, self._bio_rng, dt_s, self._chronicle
-        )
+        return step_coupled(state, self._ctx, self._civ_rng, self._bio_rng, dt_s, self._chronicle)

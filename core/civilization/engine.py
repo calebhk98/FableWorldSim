@@ -222,7 +222,7 @@ def _research_gain(state: WorldCivState, scope: _StepScope, civ: Civilization) -
     )
 
 
-def step_civilization(
+def step_civilization(  # noqa: PLR0913 - one param per simulation input
     state: WorldCivState,
     ctx: CivContext,
     rng: Rng,
