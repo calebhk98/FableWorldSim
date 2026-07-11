@@ -1,20 +1,27 @@
 /**
  * Three.js scene: camera, renderer, orbit controls, and the globe's two
  * visual layers (a translucent base sphere for depth cues, and the DGGS
- * cell-point cloud carrying the data layer's colors). See
- * `placeholder-sphere.ts` and `field-layer.ts` for why the cell geometry
- * and field values are currently a stand-in rather than server data.
+ * cell-point cloud carrying the data layer's colors). Points are real cell
+ * centroids from `grid_geometry` (`cell-geometry.ts`) colored by a real
+ * field from `query_field` (`field-layer.ts`) — see README.md's "Remaining
+ * limits" for why cells render as points/discs rather than true polygons.
  */
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { viridis } from "./palette";
 import type { FieldLayer } from "./field-layer";
-import type { SpherePoint } from "./placeholder-sphere";
+import type { CellPoint } from "./cell-geometry";
 
 const GLOBE_RADIUS = 1;
-const POINT_SIZE = 0.02;
 const BACKGROUND_COLOR = 0x05070d;
+/** Coarse worlds (e.g. 122 cells at resolution 0) get bigger discs so the
+ *  sphere isn't mostly empty; fine ones (tens of thousands of cells) get
+ *  smaller ones so they don't overlap into a solid blob. */
+function pointSizeFor(cellCount: number): number {
+  if (cellCount <= 0) return 0.03;
+  return Math.min(0.09, Math.max(0.006, 0.9 / Math.sqrt(cellCount)));
+}
 
 export class GlobeScene {
   private readonly renderer: THREE.WebGLRenderer;
@@ -22,8 +29,10 @@ export class GlobeScene {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
   private cellPoints: THREE.Points | null = null;
+  private readonly discTexture: THREE.Texture;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
+    this.discTexture = makeDiscTexture();
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.scene.background = new THREE.Color(BACKGROUND_COLOR);
@@ -87,8 +96,8 @@ export class GlobeScene {
     return new THREE.LineSegments(geometry, material);
   }
 
-  /** (Re)build the cell-point cloud, coloring each point by `layer` via Viridis. */
-  setCells(points: SpherePoint[], layer: FieldLayer): void {
+  /** (Re)build the cell-point cloud from real cell centroids, coloring each by `layer` via Viridis. */
+  setCells(points: CellPoint[], layer: FieldLayer): void {
     if (this.cellPoints) {
       this.scene.remove(this.cellPoints);
       this.cellPoints.geometry.dispose();
@@ -112,7 +121,13 @@ export class GlobeScene {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    const material = new THREE.PointsMaterial({ size: POINT_SIZE, vertexColors: true });
+    const material = new THREE.PointsMaterial({
+      size: pointSizeFor(points.length),
+      vertexColors: true,
+      map: this.discTexture,
+      alphaTest: 0.5,
+      transparent: true,
+    });
     this.cellPoints = new THREE.Points(geometry, material);
     this.scene.add(this.cellPoints);
   }
@@ -128,6 +143,29 @@ export class GlobeScene {
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }
+}
+
+/**
+ * A small radial-gradient canvas texture so each cell renders as a soft
+ * billboarded disc rather than a hard square point sprite — an honest,
+ * cheap stand-in for a true cell polygon (see the module docstring on why
+ * polygons aren't available).
+ */
+function makeDiscTexture(): THREE.Texture {
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.8, "rgba(255,255,255,1)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function latLonToXyz(latDeg: number, lonDeg: number): [number, number, number] {

@@ -215,10 +215,6 @@ td {
   color: var(--muted);
 }
 
-.legend--demo .legend__title {
-  color: var(--pending);
-}
-
 .legend__note {
   font-size: 0.72rem;
   color: var(--muted);
