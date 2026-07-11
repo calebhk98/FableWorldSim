@@ -1,0 +1,63 @@
+{
+  "_disclaimer": [
+    "This is a coarse, hand-encoded STAND-IN reference for real-world Koppen-Geiger",
+    "climatology, NOT a copy of or extract from any real gridded climate dataset.",
+    "The real, authoritative product this approximates is the 1-km Koppen-Geiger",
+    "raster of Beck, H.E., Zimmermann, N.E., McVicar, T.R., Vergopolan, N., Berg, A.,",
+    "& Wood, E.F. (2018), 'Present and future Koppen-Geiger climate classification",
+    "maps at 1-km resolution', Scientific Data 5:180214. That dataset is not bundled",
+    "here (no network access at test time, and 1-km fidelity would vastly overstate",
+    "what a coarse energy-balance model can be judged against). Instead, each row",
+    "below hand-encodes the DOMINANT Koppen group for one latitude band, separately",
+    "for land and ocean, from well-documented, textbook-level climatology (the",
+    "equatorial rainforest/monsoon belt, the subtropical high-pressure desert belts,",
+    "the mid-latitude westerlies, the boreal taiga belt, and the polar ice caps).",
+    "Bands are defined on ABSOLUTE latitude (folding N/S together) because the",
+    "simulator's Earth preset uses procedurally generated terrain (see",
+    "core/topography/procedural.py) with no correspondence to real coastlines or",
+    "to Earth's actual hemispheric land/ocean asymmetry -- comparing exact",
+    "longitude-matched cells to real Sahara/Amazon/etc. coordinates would score",
+    "geography-placement luck, not climate physics. 'ocean_group' has no official",
+    "Koppen meaning (the scheme classifies land stations only); it is this file's",
+    "own coarse judgment call about what a Koppen-like scheme would call the",
+    "typical sea-surface-temperature/precipitation regime at that latitude, used",
+    "only because the simulator itself classifies ocean cells too."
+  ],
+  "bands": [
+    {
+      "lat_min_deg": 0.0,
+      "lat_max_deg": 15.0,
+      "land_group": "A",
+      "ocean_group": "A",
+      "notes": "Deep tropics / ITCZ: Amazon, Congo, Maritime SE Asia rainforest and monsoon belt on land (A); warm, humid equatorial sea surface year-round (A-like) over open ocean."
+    },
+    {
+      "lat_min_deg": 15.0,
+      "lat_max_deg": 30.0,
+      "land_group": "B",
+      "ocean_group": "A",
+      "notes": "Subtropical high-pressure dry belt: Sahara, Arabian, Thar-fringe, Sonoran, Kalahari, Australian outback dominate this band on land (B), even though monsoon Asia within the same band is Am/Aw. Open ocean at these latitudes is still warm (subtropical gyres, coldest-month SST usually >18 C) so it is treated as A-like rather than dry, since Koppen's dryness test is a land-precipitation concept, not a low-SST one."
+    },
+    {
+      "lat_min_deg": 30.0,
+      "lat_max_deg": 50.0,
+      "land_group": "C",
+      "ocean_group": "C",
+      "notes": "Mid-latitude westerlies: most of the temperate US, Europe, and East Asia read as C on land, even though continental interiors (US Great Basin, Central Asia, Patagonia) go B or D. Open ocean here (Gulf Stream/Kuroshio-warmed mid-latitude seas) stays temperate/ice-free most of the year, i.e. C-like."
+    },
+    {
+      "lat_min_deg": 50.0,
+      "lat_max_deg": 66.5,
+      "land_group": "D",
+      "ocean_group": "C",
+      "notes": "Boreal taiga belt on land (Siberia, Canada, Scandinavia): cold winters, short mild summers (D). Open ocean at this latitude is buffered by thermal inertia and currents (e.g. Norwegian Sea) and rarely gets cold enough in the annual mean to read as anything colder than a mild marine C."
+    },
+    {
+      "lat_min_deg": 66.5,
+      "lat_max_deg": 90.1,
+      "land_group": "E",
+      "ocean_group": "E",
+      "notes": "Polar: Arctic tundra/ice sheets and Antarctica on land, sea ice and near-freezing surface water on the Arctic/Southern Ocean -- both read as E."
+    }
+  ]
+}
