@@ -80,6 +80,14 @@ def env_capacity(
     ``food_biomass_per_m2`` and ``food_params`` default to "no known food",
     which only matters for heterotrophs a caller chooses not to supply
     food for; real callers (see :mod:`core.biology.domain`) always pass both.
+
+    Suitability is a habitat-quality factor (0-1), not an absolute density
+    ceiling: the product form (crowding_cap x suitability) reflects that even
+    a perfectly suitable habitat (suitability=1) is limited by the species'
+    intrinsic crowding tolerance, while a poor habitat (suitability=0.5)
+    proportionally reduces that ceiling. The food term then applies a second,
+    independent constraint: even suitable, uncrowded habitat cannot sustain
+    more biomass than the available food allows.
     """
     habitat_cap = {loc: organism.crowding_cap_per_m2 * score for loc, score in suitability.items()}
     if organism.is_autotroph:

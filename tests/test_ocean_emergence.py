@@ -159,6 +159,84 @@ def test_western_boundary_current_warms_the_poleward_coast() -> None:
     )
 
 
+def test_western_boundary_layer_responds_to_wind_forcing() -> None:
+    """Western-boundary current strength must respond to wind, not be hardcoded.
+
+    Regression guard against a constant multiplier (e.g., hardcoded north *= 3.0)
+    creeping back into the western-boundary layer closure. The WBC magnitude
+    must be an *emergent* property of mass conservation and area ratio, not a
+    fixed factor: doubling the wind stress should roughly double the Sverdrup
+    interior transport and thus the required boundary-layer closure current,
+    and zero wind should produce near-zero boundary current regardless of the
+    basin geometry.
+    """
+    planet = earth()
+    grid = create_grid("h3", resolution=_RES, radius_m=planet.radius_m)
+
+    # A thin north-south continent: same setup as
+    # test_western_boundary_current_warms_the_poleward_coast.
+    land = {cell: -5.0 <= grid.centroid(cell).lon_deg <= 5.0 for cell in grid.cells()}
+    mask = SeaMask(
+        sea_level_m=0.0,
+        ocean={cell: not is_land for cell, is_land in land.items()},
+        intertidal=dict.fromkeys(land, False),
+    )
+    initial_sst = {
+        cell: 300.0 - 0.6 * abs(grid.centroid(cell).lat_deg)
+        for cell in grid.cells()
+        if mask.ocean[cell]
+    }
+
+    # Cells on the western margin (land to the west) in the subtropical band.
+    ocean = SurfaceOcean(grid, planet, mask, initial_sst.copy())
+    west_margin = [
+        cell
+        for cell in initial_sst
+        if ocean._has_land_to_west(cell) and 20.0 <= grid.centroid(cell).lat_deg <= 65.0
+    ]
+    assert west_margin, "expected western-margin cells in subtropical band"
+
+    def run_scenario(wind_stress_scale: float) -> float:
+        """Run ocean with scaled wind stress; return mean WBC north speed."""
+        ocean = SurfaceOcean(grid, planet, mask, initial_sst.copy())
+        base_east_wind = {
+            cell: _STRESS_PER_WIND_SPEED_PA
+            * zonal_band_wind(grid.centroid(cell).lat_deg, planet)[0]
+            for cell in initial_sst
+        }
+        scaled_wind = {cell: stress * wind_stress_scale for cell, stress in base_east_wind.items()}
+        forcing = OceanForcing(
+            wind_stress_east_pa=scaled_wind,
+            wind_stress_north_pa=dict.fromkeys(initial_sst, 0.0),
+            surface_heat_flux_w_m2=dict.fromkeys(initial_sst, 0.0),
+            ocean_mask=dict.fromkeys(initial_sst, True),
+        )
+        dt_s = planet.orbital_period_s / 4.0
+        for _ in range(3):
+            ocean.step(forcing, dt_s)
+        surface = ocean.surface()
+        return sum(abs(surface.current_north_m_s[c]) for c in west_margin) / len(west_margin)
+
+    normal_wbc = run_scenario(1.0)
+    doubled_wbc = run_scenario(2.0)
+    zero_wbc = run_scenario(0.0)
+
+    # Doubled wind should increase the boundary current (at least 1.1x, to guard
+    # against a hardcoded constant that ignores forcing). Allow up to 3x to account
+    # for nonlinear speed clamping and model discretization noise.
+    assert doubled_wbc > 1.1 * normal_wbc, (
+        f"doubled wind should increase WBC, got normal={normal_wbc:.4f}, doubled={doubled_wbc:.4f}"
+    )
+    assert doubled_wbc < 3.0 * normal_wbc, (
+        f"WBC scaling should stay sub-linear due to speed clamping, got normal={normal_wbc:.4f}, "
+        f"doubled={doubled_wbc:.4f}"
+    )
+    # Zero wind should produce negligible boundary current (< 5% of normal).
+    assert zero_wbc < 0.05 * normal_wbc, (
+        f"zero wind should produce negligible WBC, got normal={normal_wbc:.4f}, zero={zero_wbc:.4f}"
+    )
+
+
 def test_seasonal_monsoon_reverses_the_coastal_wind() -> None:
     """A continent's coast should flip from onshore to offshore wind.
 
