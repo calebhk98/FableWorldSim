@@ -103,7 +103,7 @@ def _query_field(state: AppState, params: BaseModel) -> object:
 
 
 def _grid_geometry(state: AppState, params: BaseModel) -> object:
-    """Return cell_id -> {lat, lng} centroid for the current world's grid."""
+    """Return cell_id -> {lat, lng, boundary} for the current world's grid."""
     return grid_geometry(_require_world(state))
 
 
@@ -162,8 +162,9 @@ def register_world_commands(registry: CommandRegistry, command_cls: type[Command
     registry.register(
         command_cls(
             "grid_geometry",
-            "Return cell_id -> {lat, lng} centroid for every cell of the live "
-            "world's grid -- what a client needs to place cells on a globe.",
+            "Return cell_id -> {lat, lng, boundary} for every cell of the live "
+            "world's grid -- centroid plus ordered boundary vertices, what a "
+            "client needs to draw cells as polygons on a globe.",
             _EmptyParams,
             _grid_geometry,
         )

@@ -293,6 +293,18 @@ class IseaGrid(Grid):
         """Return the cell containing a latitude/longitude point."""
         return self._lookup_cell(point, self._resolution)
 
+    def boundary(self, cell: CellId) -> Sequence[LatLon]:
+        """Return the ordered polygon vertices dggrid materialized for ``cell``.
+
+        The exterior ring shapely/dggrid4py hand back repeats its first
+        vertex as the last (the GeoJSON closing convention); that repeat is
+        dropped here so the count matches the port's "no repeated closing
+        point" contract.
+        """
+        self._materialize()
+        ring = list(self._polygons[cell].exterior.coords)
+        return tuple(LatLon(lat_deg=lat, lon_deg=lon) for lon, lat in ring[:-1])
+
 
 def create(resolution: int, radius_m: float) -> Grid:
     """Create an :class:`IseaGrid`; registry entry point for backend 'isea'."""

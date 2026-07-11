@@ -90,6 +90,18 @@ class FakeGrid(Grid):
     def children(self, cell: CellId) -> Sequence[CellId]:
         return ()
 
+    def boundary(self, cell: CellId) -> Sequence[LatLon]:
+        """Return the cell's four corners, half a spacing out from center."""
+        row, col = self._parse(cell)
+        lat, lon = row * self._spacing_deg, col * self._spacing_deg
+        half = self._spacing_deg / 2.0
+        return (
+            LatLon(lat_deg=lat - half, lon_deg=lon - half),
+            LatLon(lat_deg=lat - half, lon_deg=lon + half),
+            LatLon(lat_deg=lat + half, lon_deg=lon + half),
+            LatLon(lat_deg=lat + half, lon_deg=lon - half),
+        )
+
 
 def two_island_world(grid: FakeGrid) -> tuple[dict[str, float], SeaMask]:
     """Heights and sea mask with an ocean strip splitting west and east islands."""

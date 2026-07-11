@@ -176,19 +176,21 @@ def query_field(world: PersistedWorld, field_name: str) -> dict[CellId, float]:
     raise KeyError(f"unknown field {field_name!r}; known: {known}")
 
 
-def grid_geometry(world: PersistedWorld) -> dict[CellId, dict[str, float]]:
-    """Return each cell's centroid lat/lng -- what a globe needs to place cells.
+def grid_geometry(world: PersistedWorld) -> dict[CellId, dict[str, object]]:
+    """Return each cell's centroid and boundary -- what a globe needs to draw cells.
 
-    The ``Grid`` port exposes no cell-boundary-vertex accessor (only
-    centroid/area/neighbors/edge_length), so this is centroid-only; a
-    boundary-polygon endpoint would need that port extended first. Noted
-    as deferred LOD/geometry fidelity, not implemented here.
+    Each entry is ``{"lat": ..., "lng": ..., "boundary": [[lat, lng], ...]}``:
+    the centroid (unchanged, for backward compatibility with point-only
+    clients) plus the ordered boundary vertices from ``Grid.boundary`` (no
+    repeated closing point; 6 per H3/ISEA hex, 5 for their 12 pentagons, 4
+    per S2 quad) that let a client draw real cell polygons instead of points.
     """
     grid = world.fast.grid
-    geometry: dict[CellId, dict[str, float]] = {}
+    geometry: dict[CellId, dict[str, object]] = {}
     for cell in grid.cells():
         point = grid.centroid(cell)
-        geometry[cell] = {"lat": point.lat_deg, "lng": point.lon_deg}
+        boundary = [[vertex.lat_deg, vertex.lon_deg] for vertex in grid.boundary(cell)]
+        geometry[cell] = {"lat": point.lat_deg, "lng": point.lon_deg, "boundary": boundary}
     return geometry
 
 

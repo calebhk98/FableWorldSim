@@ -125,6 +125,14 @@ class S2Grid(Grid):
         latlng = s2sphere.LatLng.from_degrees(point.lat_deg, point.lon_deg)
         return s2sphere.CellId.from_lat_lng(latlng).parent(self._resolution).to_token()
 
+    def boundary(self, cell: CellId) -> Sequence[LatLon]:
+        """Return the four ordered corner vertices of this quad cell."""
+        vertices = []
+        for point in self._vertices(cell):
+            latlng = s2sphere.LatLng.from_point(point)
+            vertices.append(LatLon(float(latlng.lat().degrees), float(latlng.lng().degrees)))
+        return tuple(vertices)
+
 
 def create(resolution: int, radius_m: float) -> Grid:
     """Create an :class:`S2Grid`; registry entry point for backend 's2'."""
