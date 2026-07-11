@@ -56,3 +56,50 @@ class ArrayBackend(ABC):
     def to_list(self, array: Any) -> list[float]:
         """Return an array's contents as a plain list of floats."""
         return [float(value) for value in list(array)]
+
+    @property
+    def num_devices(self) -> int:
+        """Return how many devices fields can be sharded across.
+
+        One for single-device backends (numpy, cupy); the count of visible
+        accelerators for a device-mesh backend (jax).  The auto-scaler's
+        ``device_count`` recommendation is the *target*; this is what the
+        backend can actually reach right now.
+        """
+        return 1
+
+    def shard(self, array: Any, axis: int = 0) -> Any:
+        """Return ``array`` partitioned across all devices along ``axis``.
+
+        The default is a single-device identity — the array is returned
+        unchanged.  Device-mesh backends override this to split a per-cell
+        field across the machine's GPUs while keeping it an ordinary
+        Array-API value, so callers never handle placement themselves
+        ("the backend hides which device holds which shard").
+
+        The axis is **capacity-padded** up to a multiple of the device
+        count so *any* count (3, 5, 15, 27, ...) shards *any* grid size;
+        the pad cells are the additive identity (0).  Because the sim is
+        area-weighted, padding the area field the same way gives those
+        cells zero weight, so they vanish from area-weighted reductions
+        with no masking.  Use :meth:`unshard` to recover the logical field
+        (padding dropped) for output or non-weighted reductions.
+        """
+        return array
+
+    def unshard(self, array: Any, count: int, axis: int = 0) -> Any:
+        """Return the first ``count`` cells, gathered onto one device.
+
+        Undoes :meth:`shard`: collects the shards and drops the capacity
+        padding, yielding the logical field.  The single-device default
+        never pads, so it returns ``array`` unchanged.
+        """
+        return array
+
+    def shard_devices(self, array: Any) -> int:
+        """Return how many devices hold a piece of ``array`` (1 if local).
+
+        Lets orchestration and tests confirm a field was actually
+        distributed instead of silently kept on one device.
+        """
+        return 1

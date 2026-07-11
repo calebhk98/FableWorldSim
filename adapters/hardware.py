@@ -1,11 +1,15 @@
 """Host hardware probe: use the whole machine, auto-detected.
 
 At startup the sim probes GPU count/VRAM, CPU cores, and total RAM, then
-recommends a fidelity profile (grid resolution x timestep x model detail)
-and compute backend.  Auto is only the default — everything is pinnable
-via config/API.  Detected RAM caps resident resolution; a low-memory
-situation downgrades fidelity gracefully instead of crashing (see
-:func:`downgrade_fidelity`).
+recommends a fidelity profile (grid resolution x timestep x model detail),
+a compute backend, and a scale-out plan (``device_count`` GPUs to shard
+across, ``cpu_workers`` cores to parallelize the CPU path over).  The
+profile scales with GPU *count and aggregate VRAM*, so a single 3090, both
+3090s, and an 8x A100 box (p4de/p5) each get a distinct answer rather than
+one flat "has a GPU" tier.  Auto is only the default — everything is
+pinnable via config/API.  Detected RAM caps resident resolution; a
+low-memory situation downgrades fidelity gracefully instead of crashing
+(see :func:`downgrade_fidelity`).
 """
 
 from __future__ import annotations
@@ -19,6 +23,27 @@ from importlib import import_module
 _GIB = 1024**3
 _LOW_RAM_GIB = 8
 _HIGH_RAM_GIB = 32
+
+# At or above this GPU count, prefer jax (device-mesh sharding is its
+# multi-GPU story); a single GPU stays on the cupy-preferred "auto" path.
+_MULTI_GPU_THRESHOLD = 2
+
+# When a GPU backend reports no per-device VRAM (e.g. the jax probe path),
+# assume this conservative floor per device so resolution still scales with
+# GPU *count* instead of collapsing to the single-GPU baseline.
+_DEFAULT_GPU_VRAM_GIB = 8
+
+# Grid resolution by aggregate GPU VRAM (GiB): each H3/S2 level multiplies
+# cell count ~7x, so more resident VRAM buys another refinement level. A
+# single 24 GB card holds the "accurate" baseline (5); a p4de/p5 box
+# (8x80 GB = 640 GiB) earns the top tier. Descending; first threshold that
+# fits the aggregate wins.
+_GPU_VRAM_RESOLUTION_LADDER: tuple[tuple[float, int], ...] = (
+    (480, 8),
+    (160, 7),
+    (48, 6),
+    (0, 5),
+)
 
 
 @dataclass(frozen=True)
@@ -42,11 +67,20 @@ class Recommendation:
 
     The full fidelity autotuner (resolution/timestep from benchmarks) is
     roadmap; these heuristics give sane startup defaults.
+
+    ``device_count`` and ``cpu_workers`` are the *scale-out plan*: how many
+    GPUs the array backend should shard fields across, and how many CPU
+    cores the numpy path should parallelize over.  They let the recommender
+    differentiate every tier — a single 3090, both 3090s, and an 8x A100
+    box no longer collapse to one profile — and hand the execution layers a
+    concrete target instead of defaulting to one device / one core.
     """
 
     compute_backend: str
     fidelity_level: str
     grid_resolution: int
+    device_count: int = 0
+    cpu_workers: int = 1
 
 
 def _total_ram_bytes() -> int:
@@ -125,18 +159,50 @@ def probe_host() -> HostCapabilities:
 def recommend(caps: HostCapabilities) -> Recommendation:
     """Return a startup profile for the probed hardware.
 
-    GPU boxes get the accurate tier; big-RAM CPU boxes the balanced
-    tier; small machines (the 4 GB no-GPU laptop) the fast tier at a
-    coarse resolution.  The conservation rule makes results comparable
-    across all of them.
+    GPU boxes get the accurate tier, with resolution scaled by *aggregate
+    VRAM* and a ``device_count`` equal to the GPUs to shard across — so a
+    single 3090, both 3090s, and an 8x A100 (p4de/p5) box each get a
+    distinct profile instead of one flat "has a GPU" answer.  Big-RAM CPU
+    boxes get the balanced tier; small machines (the 4 GB no-GPU laptop)
+    the fast tier at a coarse resolution.  Every profile carries
+    ``cpu_workers`` so the CPU path can use the whole Ryzen 9, not one
+    core.  The conservation rule makes results comparable across all tiers.
     """
+    workers = max(1, caps.cpu_cores)
     if caps.gpu_count >= 1:
-        return Recommendation("auto", "accurate", 5)
+        # Multiple GPUs -> jax, whose device-mesh sharding is the design's
+        # multi-GPU path; a single GPU stays on "auto" (cupy preferred).
+        backend = "jax" if caps.gpu_count >= _MULTI_GPU_THRESHOLD else "auto"
+        resolution = _gpu_resolution(caps)
+        return Recommendation(
+            backend, "accurate", resolution, device_count=caps.gpu_count, cpu_workers=workers
+        )
     if caps.ram_gib >= _HIGH_RAM_GIB:
-        return Recommendation("numpy", "balanced", 4)
+        return Recommendation("numpy", "balanced", 4, device_count=0, cpu_workers=workers)
     if caps.ram_gib >= _LOW_RAM_GIB:
-        return Recommendation("numpy", "balanced", 3)
-    return Recommendation("numpy", "fast", 2)
+        return Recommendation("numpy", "balanced", 3, device_count=0, cpu_workers=workers)
+    return Recommendation("numpy", "fast", 2, device_count=0, cpu_workers=workers)
+
+
+def _aggregate_gpu_vram_gib(caps: HostCapabilities) -> float:
+    """Return total GPU VRAM in GiB, estimating when the probe hid it.
+
+    The cupy probe reports exact per-device VRAM; the jax fallback reports
+    none, so assume a conservative floor per device to keep resolution
+    scaling with GPU count instead of collapsing to the baseline.
+    """
+    if caps.gpu_vram_bytes:
+        return sum(caps.gpu_vram_bytes) / _GIB
+    return caps.gpu_count * _DEFAULT_GPU_VRAM_GIB
+
+
+def _gpu_resolution(caps: HostCapabilities) -> int:
+    """Return the accurate-tier grid resolution for the GPUs present."""
+    aggregate = _aggregate_gpu_vram_gib(caps)
+    for threshold, resolution in _GPU_VRAM_RESOLUTION_LADDER:
+        if aggregate >= threshold:
+            return resolution
+    return _GPU_VRAM_RESOLUTION_LADDER[-1][1]
 
 
 def downgrade_fidelity(level: str) -> str | None:

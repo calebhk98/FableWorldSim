@@ -48,3 +48,18 @@ pytest
 
 See [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) for the TDD (red→green) workflow and coding
 conventions, and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the ports & adapters design.
+
+## Profiling performance
+
+To see **where a tick spends its time** (and thus what to optimize next), run the profiler:
+
+```bash
+python -m tools.benchmark                          # coarse tier, auto-detected backend
+python -m tools.benchmark --resolution 4 --repeat 5
+python -m tools.benchmark --backend numpy --json bench.json   # machine-readable baseline
+```
+
+It times the hot kernels (per-cell diffusion, sequential river flow-accumulation, and the
+area-weighted reduction) and prints a table ranked by wall time with each component's share of
+the total. It is a measurement tool, not a budget guard — the pass/fail tier budgets live in
+`tests/test_capacity.py`.

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -90,6 +90,14 @@ class SetSettingParams(BaseModel):
     value: Any = Field(default=None, description="New value; validated by the schema.")
 
 
+class SetComputeBackendParams(BaseModel):
+    """Arguments for set_compute_backend."""
+
+    backend: Literal["auto", "numpy", "cupy", "jax"] = Field(
+        description="Compute backend to swap to live: auto | numpy | cupy | jax."
+    )
+
+
 class SweepParams(BaseModel):
     """Arguments for run_world_sweep."""
 
@@ -112,7 +120,17 @@ def apply_setting(state: AppState, path: str, value: object) -> object:
     The single write path shared by the set_setting command and the REST
     settings endpoint, so every surface behaves identically — and every
     write serializes through the single-writer lock.
+
+    ``compute.backend`` is special-cased through the atomic hot-swap so
+    the live backend handle and the stored setting can never disagree
+    (an unavailable backend rejects the whole change).
     """
+    if path == "compute.backend":
+        backend = state.set_compute_backend(str(value))
+        with state.write_lock:
+            state.metrics["settings_changed"] += 1
+        state.bus.publish(SettingChangedEvent(path=path, value=backend.name))
+        return backend.name
     with state.write_lock:
         state.settings = with_setting(state.settings, path, value)
         new_value = get_setting(state.settings, path)
@@ -147,6 +165,30 @@ def _set_setting(state: AppState, params: BaseModel) -> object:
 def _list_grid_backends(state: AppState, params: BaseModel) -> object:
     """Return the known grid backend toggle names."""
     return list(available_backends())
+
+
+def _describe_backend(state: AppState) -> dict[str, object]:
+    """Return the live compute backend's name, device, and device count."""
+    backend = state.compute_backend
+    return {
+        "backend": backend.name,
+        "device": backend.device,
+        "num_devices": backend.num_devices,
+    }
+
+
+def _get_compute_backend(state: AppState, params: BaseModel) -> object:
+    """Return the compute backend the sim is currently running on."""
+    return _describe_backend(state)
+
+
+def _set_compute_backend(state: AppState, params: BaseModel) -> object:
+    """Hot-swap the compute backend (CPU<->GPU) while the sim runs."""
+    if not isinstance(params, SetComputeBackendParams):
+        msg = "set_compute_backend invoked with the wrong params model"
+        raise TypeError(msg)
+    state.set_compute_backend(params.backend)
+    return _describe_backend(state)
 
 
 def _get_run_telemetry(state: AppState, params: BaseModel) -> object:
@@ -239,6 +281,27 @@ def build_default_registry() -> CommandRegistry:
             "(ticks/sec, seconds/tick, per-process wall time); empty before any run.",
             NoParams,
             _get_run_telemetry,
+        )
+    )
+    registry.register(
+        Command(
+            "get_compute_backend",
+            "Return the compute backend the sim is running on right now "
+            "(name, device cpu/gpu, and how many devices it shards across).",
+            NoParams,
+            _get_compute_backend,
+        )
+    )
+    registry.register(
+        Command(
+            "set_compute_backend",
+            "Hot-swap the compute backend (e.g. CPU numpy <-> GPU jax) while "
+            "the sim runs. The swap lands between ticks via the single-writer "
+            "lock; requesting a backend this host cannot provide is rejected "
+            "and leaves the running backend unchanged.",
+            SetComputeBackendParams,
+            _set_compute_backend,
+            mutates=True,
         )
     )
     registry.register(
