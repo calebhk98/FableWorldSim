@@ -1,11 +1,11 @@
 {
   "max_height_m": 5013.667059818,
-  "mean_precipitation_mm_yr": 824.3364573974602,
-  "mean_temperature_k": 299.6506032565934,
+  "mean_precipitation_mm_yr": 824.469000169173,
+  "mean_temperature_k": 299.63626588940133,
   "min_height_m": -1536.6737162639292,
   "ocean_area_fraction": 0.7087043093585806,
   "permanent_ice_fraction": 0.0,
-  "probe_precipitation_mm_yr": 1005.8054849308107,
-  "probe_temperature_k": 296.6276174543917,
+  "probe_precipitation_mm_yr": 1007.0390225597439,
+  "probe_temperature_k": 296.69635448945974,
   "sea_level_m": 2655.608303054465
 }
