@@ -2,13 +2,12 @@
 
 import type { Legend } from "../globe/palette";
 
-export function renderLegend(container: HTMLElement, legend: Legend, isLiveServerData: boolean): void {
+export function renderLegend(container: HTMLElement, legend: Legend): void {
   container.innerHTML = "";
-  container.classList.toggle("legend--demo", !isLiveServerData);
 
   const title = document.createElement("div");
   title.className = "legend__title";
-  title.textContent = isLiveServerData ? legend.title : `${legend.title} — DEMO DATA`;
+  title.textContent = legend.title;
   container.appendChild(title);
 
   const bar = document.createElement("div");
@@ -30,11 +29,10 @@ export function renderLegend(container: HTMLElement, legend: Legend, isLiveServe
   unit.textContent = legend.unit;
   container.appendChild(unit);
 
-  if (!isLiveServerData) {
-    const note = document.createElement("p");
-    note.className = "legend__note";
-    note.textContent =
-      "No per-cell field endpoint is exposed by this API build; shading is synthetic. See README → API gaps.";
-    container.appendChild(note);
-  }
+  const note = document.createElement("p");
+  note.className = "legend__note";
+  note.textContent =
+    "Cells are rendered as centroid points, not boundary polygons — the API's Grid " +
+    "port has no cell-boundary accessor yet. See README → Remaining limits.";
+  container.appendChild(note);
 }

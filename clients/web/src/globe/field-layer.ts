@@ -1,65 +1,63 @@
 /**
- * The per-cell data layer (height or temperature) overlaid on the globe.
+ * Builds a `FieldLayer` (per-point values + legend metadata) for one of the
+ * live world's REAL per-cell fields, fetched via `query_field` (see
+ * `src/api/world.ts`). Replaces the old synthetic latitude-shading
+ * placeholder now that the API exposes `create_world`/`grid_geometry`/
+ * `query_field` (issue #10's persisted, steppable world).
  *
- * API GAP: as of this build, no REST route or command returns a per-cell
- * field for a generated world — `run_world_sweep` (the only command that
- * runs a simulation) returns aggregate habitability scores and non-spatial
- * deep-run summaries (population totals, river channel count), never a
- * cell -> value mapping, and there is no per-cell geometry endpoint to
- * anchor one to either. See clients/web/README.md for the full note.
- *
- * Rather than hardcode that absence, this module *asks* the server (via
- * the already-fetched `/commands` list) whether a matching command exists,
- * and only falls back to a clearly-labeled synthetic demo layer when it
- * doesn't. The moment a server build adds e.g. `get_cell_field`, this seam
- * is where it plugs in — no other module needs to change.
+ * `query_field` returns `cell_id -> value`, which this module aligns to a
+ * given `CellPoint[]` order (from `cell-geometry.ts`) so `scene.ts` can zip
+ * positions and colors index-for-index.
  */
 
-import type { CommandDescriptor } from "../api/types";
-import { findCommand } from "../api/discovery";
-import type { SpherePoint } from "./placeholder-sphere";
+import type { FieldValues } from "../api/world";
+import type { CellPoint } from "./cell-geometry";
 
-/** Command names this client would recognize as a per-cell field source. */
-const CANDIDATE_FIELD_COMMANDS = ["get_cell_field", "get_field", "query_cell_field"];
-
-export interface FieldLayer {
-  /** Human label, e.g. "Temperature (demo)". */
-  title: string;
+/** A field this client's layer switcher offers, in switcher order. */
+export interface FieldDescriptor {
+  /** The exact `query_field` `field` param value. */
+  name: string;
+  label: string;
   unit: string;
-  /** One value per point, same order/length as the sphere points it colors. */
-  values: number[];
-  min: number;
-  max: number;
-  /** False when this is the synthetic fallback, not server data. */
-  isLiveServerData: boolean;
-}
-
-/** Look for a server-side per-cell field command; returns undefined if none exists. */
-export function detectFieldCommand(
-  commands: CommandDescriptor[],
-): CommandDescriptor | undefined {
-  for (const name of CANDIDATE_FIELD_COMMANDS) {
-    const found = findCommand(commands, name);
-    if (found) return found;
-  }
-  return undefined;
 }
 
 /**
- * A synthetic, deterministic "temperature-like" layer: warm at the equator,
- * cold at the poles. This is generic textbook latitude-band shading, not a
- * reproduction of FableWorldSim's climate model (core/climate/model.py) —
- * it exists only so the palette/legend machinery has something to render
- * while no real field endpoint is exposed. Always labeled "(demo)" in the UI.
+ * Fields query_field understands (api/world_state.py FIELD_NAMES), minus
+ * "elevation" (an alias for "height" server-side — offering both would just
+ * be the same values twice in the switcher).
  */
-export function syntheticDemoLayer(points: SpherePoint[]): FieldLayer {
-  const values = points.map((p) => Math.cos((p.latDeg * Math.PI) / 180));
+export const FIELD_DESCRIPTORS: FieldDescriptor[] = [
+  { name: "height", label: "Height", unit: "m" },
+  { name: "temperature", label: "Temperature", unit: "K" },
+  { name: "precipitation", label: "Precipitation", unit: "mm/yr" },
+];
+
+/** Restrict FIELD_DESCRIPTORS to what this world's get_world actually reports. */
+export function availableFieldDescriptors(fieldsAvailable: string[]): FieldDescriptor[] {
+  return FIELD_DESCRIPTORS.filter((d) => fieldsAvailable.includes(d.name));
+}
+
+export interface FieldLayer {
+  title: string;
+  unit: string;
+  /** One value per point, same order/length as the CellPoint[] it colors. */
+  values: number[];
+  min: number;
+  max: number;
+}
+
+/** Align a query_field response to `points`' order and compute its domain. */
+export function buildFieldLayer(
+  descriptor: FieldDescriptor,
+  values: FieldValues,
+  points: CellPoint[],
+): FieldLayer {
+  const aligned = points.map((point) => values[point.cellId] ?? 0);
   return {
-    title: "Latitude shading (demo)",
-    unit: "unitless",
-    values,
-    min: Math.min(...values),
-    max: Math.max(...values),
-    isLiveServerData: false,
+    title: descriptor.label,
+    unit: descriptor.unit,
+    values: aligned,
+    min: aligned.length ? Math.min(...aligned) : 0,
+    max: aligned.length ? Math.max(...aligned) : 0,
   };
 }
