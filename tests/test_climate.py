@@ -18,7 +18,7 @@ from adapters.grid_registry import create_grid
 from adapters.rng_seeded import SeededRng
 from core.climate.insolation import insolation_field
 from core.climate.model import ClimateState, simulate_climate
-from core.climate.temperature import solve_temperature_with_ice
+from core.climate.temperature import solve_temperature_with_ice, temperature_field
 from core.climate.wind import zonal_band_wind
 from core.hydrology.sea_mask import SeaMask, build_sea_mask
 from core.sim.planet_config import PlanetConfig
@@ -186,6 +186,45 @@ def test_orographic_shadow_on_real_grid() -> None:
     assert windward > lee * 1.5
 
 
+def test_convergence_zone_rains_more_than_divergence_zone() -> None:
+    """A real wind-divergence field, not a flat per-hop fraction, drives rain.
+
+    An all-ocean, flat, uniform-temperature world isolates the
+    convergence term from evaporation/orographic effects: winds blowing
+    toward the same meridian converge there (piling moisture up); the
+    mirrored pair blowing away from it diverges. The old model couldn't
+    tell these apart -- its "convergence" was one constant fraction
+    regardless of wind (issue #20).
+    """
+    from core.climate.moisture import MoistureInputs, precipitation_field
+
+    planet = earth()
+    grid = create_grid("h3", resolution=1, radius_m=planet.radius_m)
+    heights = dict.fromkeys(grid.cells(), 0.0)
+    mask = build_sea_mask(grid, heights, ocean_fraction=1.0)
+    temps = dict.fromkeys(heights, 295.0)
+    ice = dict.fromkeys(heights, False)
+
+    def rain_for(inward: bool) -> dict[CellId, float]:
+        sign = -1.0 if inward else 1.0
+        winds = {
+            cell: (sign * (-1.0 if grid.centroid(cell).lon_deg < 0.0 else 1.0) * 7.0, 0.0)
+            for cell in grid.cells()
+        }
+        inputs = MoistureInputs(temps=temps, winds=winds, heights_m=heights, sea_mask=mask, ice=ice)
+        return precipitation_field(grid, inputs)
+
+    def band_mean(rain: dict[CellId, float]) -> float:
+        values = [
+            rain[c]
+            for c in rain
+            if -12.0 <= grid.centroid(c).lon_deg <= 12.0 and abs(grid.centroid(c).lat_deg) < 45.0
+        ]
+        return sum(values) / len(values)
+
+    assert band_mean(rain_for(inward=True)) > band_mean(rain_for(inward=False)) * 5.0
+
+
 def test_lake_surface_evaporates_like_open_water() -> None:
     """A lake cell should contribute humidity like the ocean, not like bare
     land, so a lake shows up as a moisture source for downwind precipitation
@@ -272,6 +311,54 @@ def test_atmosphere_thickness_alone_sets_the_day_night_swing() -> None:
         return max(temps) - min(temps)
 
     assert spread(thin) > spread(thick)
+
+
+def _mean_no_ice_temp(atmosphere_overrides: dict[str, object]) -> float:
+    """Return an Earth-based world's mean temperature for one atmosphere tweak.
+
+    Ice is pinned off so the (separately emergent, separately tested)
+    ice-albedo feedback can't add its own nonlinearity on top of the one
+    atmosphere.* field under test.
+    """
+    base = earth()
+    grid = create_grid("h3", resolution=0, radius_m=base.radius_m)
+    heights = ProceduralTopography(SeededRng(_SEED)).heights(grid)
+    mask = build_sea_mask(grid, heights, base.ocean_fraction)
+    ice = dict.fromkeys(grid.cells(), False)
+    atmosphere = dataclasses.replace(base.atmosphere, **atmosphere_overrides)
+    planet = dataclasses.replace(base, atmosphere=atmosphere)
+    insolation = insolation_field(grid, planet, orbit_phase=0.0)
+    temps = temperature_field(grid, planet, insolation, mask, ice)
+    return sum(temps.values()) / len(temps)
+
+
+def test_greenhouse_warming_increases_monotonically_with_co2() -> None:
+    """More CO2 at fixed pressure must raise mean temperature.
+
+    Only ``composition`` changes between runs -- no per-preset
+    ``greenhouse_offset_k`` literal is involved anywhere in this loop
+    (issue #19): the warming has to fall out of
+    ``Atmosphere.greenhouse_offset_k`` deriving more optical depth from
+    more absorber, not from a hand-tuned number.
+    """
+    fractions = [0.0, 0.001, 0.01, 0.1, 0.5, 0.95]
+    means = [_mean_no_ice_temp({"composition": {"N2": 1.0 - f, "CO2": f}}) for f in fractions]
+    assert means == sorted(means), means
+    assert means[-1] > means[0] + 5.0, "expected a meaningful CO2-driven warming spread"
+
+
+def test_greenhouse_warming_increases_monotonically_with_pressure() -> None:
+    """More surface pressure at fixed composition must raise mean temperature.
+
+    Companion to the CO2 test above (issue #19): the same CO2-bearing
+    mix under a thicker column has more absorber in its path (higher
+    partial pressure), so a thicker atmosphere warms more -- Venus-thick
+    versus Mars-thin falls out of this, not a literal per-planet.
+    """
+    pressures = [0.0, 1_000.0, 10_000.0, 101_325.0, 1_000_000.0]
+    means = [_mean_no_ice_temp({"surface_pressure_pa": p}) for p in pressures]
+    assert means == sorted(means), means
+    assert means[-1] > means[0] + 5.0, "expected a meaningful pressure-driven warming spread"
 
 
 @pytest.mark.slow

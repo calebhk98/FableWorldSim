@@ -1,12 +1,16 @@
 """Temperature: per-cell energy balance with transport and ice-albedo.
 
 Each cell radiates what it absorbs (Stefan-Boltzmann) plus the
-atmosphere's greenhouse offset; lateral heat transport is edge-weighted
-diffusion whose strength scales with atmospheric pressure (thick CO2 ->
-even Venus-like temps; thin/none -> huge contrasts like Mars/Moon).
-Snow/ice cover feeds back through albedo: more ice -> more reflection ->
-cooler -> more ice, iterated to a stable cover — this is a large part of
-why poles are cold and climate has tipping behavior.
+atmosphere's greenhouse offset -- itself derived from composition and
+surface pressure, not a hand-supplied literal (see
+``core.sim.planet_config.Atmosphere.greenhouse_offset_k``). Lateral heat
+transport is edge-weighted diffusion whose strength scales with
+atmospheric pressure *and* how radiatively opaque the atmosphere is
+(thick, strongly-absorbing CO2 -> even Venus-like temps; thin/none ->
+huge contrasts like Mars/Moon). Snow/ice cover feeds back through
+albedo: more ice -> more reflection -> cooler -> more ice, iterated to a
+stable cover — this is a large part of why poles are cold and climate
+has tipping behavior.
 """
 
 from __future__ import annotations
@@ -43,11 +47,18 @@ def pressure_ratio(planet: PlanetConfig) -> float:
 def transport_iterations(planet: PlanetConfig) -> int:
     """Return how many diffusion passes the atmosphere earns.
 
-    Scales with sqrt(pressure): 0 for airless (no transport at all),
-    ~20 for Earth, capped for Venus-thick.
+    Scales with sqrt(pressure) -- 0 for airless (no transport at all),
+    ~20 for Earth, capped for Venus-thick -- and gets a further boost
+    from how radiatively opaque the atmosphere is
+    (``Atmosphere.greenhouse_saturation``, 0..1): a thick, strongly
+    greenhouse-active blanket doesn't just trap heat, it also mixes it
+    around more effectively (higher heat capacity, stronger
+    circulation), so composition affects transport too, not only
+    pressure.
     """
     ratio = pressure_ratio(planet)
-    return min(_MAX_TRANSPORT_ITERATIONS, round(20.0 * math.sqrt(ratio)))
+    opacity_boost = 1.0 + planet.atmosphere.greenhouse_saturation
+    return min(_MAX_TRANSPORT_ITERATIONS, round(20.0 * math.sqrt(ratio) * opacity_boost))
 
 
 def cell_albedo(cell: CellId, sea_mask: SeaMask, ice: Mapping[CellId, bool]) -> float:
