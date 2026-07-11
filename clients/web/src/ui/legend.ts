@@ -32,7 +32,7 @@ export function renderLegend(container: HTMLElement, legend: Legend): void {
   const note = document.createElement("p");
   note.className = "legend__note";
   note.textContent =
-    "Cells are rendered as centroid points, not boundary polygons — the API's Grid " +
-    "port has no cell-boundary accessor yet. See README → Remaining limits.";
+    "Cells are rendered as true boundary polygons from the API's grid_geometry " +
+    "(a centroid-fan triangulation). See README → Remaining limits.";
   container.appendChild(note);
 }

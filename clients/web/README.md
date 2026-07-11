@@ -30,10 +30,11 @@ On load, the client asks the server for its live world (`get_world`); if none ex
 yet it creates one (`create_world`, seed 1, resolution 0 — the server's own cheapest
 default, 122 cells). Either way it then:
 
-1. Fetches `grid_geometry` — every cell's real lat/lng centroid — and places one point
-   per cell on the globe (`src/globe/cell-geometry.ts`).
+1. Fetches `grid_geometry` — every cell's real lat/lng centroid and ordered boundary
+   vertices — and draws each cell as a true filled polygon on the globe
+   (`src/globe/cell-geometry.ts`, `src/globe/scene.ts`).
 2. Fetches `query_field` for the selected field (height by default) and colors each
-   point with the colorblind-safe, perceptually-uniform Viridis palette
+   polygon with the colorblind-safe, perceptually-uniform Viridis palette
    (`src/globe/field-layer.ts`, `src/globe/palette.ts`), with a structured legend
    (`src/ui/legend.ts`) that's always in sync with what's actually rendered.
 
@@ -67,7 +68,7 @@ real, self-described endpoints (`api/app.py`):
 | World | `POST /commands/get_world` | Check for an already-live world on load; the World panel's summary line |
 | World | `POST /commands/step_world` | The "Step" button — advances the live world and returns fresh species/civ stats |
 | World | `POST /commands/query_field` | The globe's data layer — real per-cell height/temperature/precipitation |
-| World | `POST /commands/grid_geometry` | Real per-cell centroids the globe places points at |
+| World | `POST /commands/grid_geometry` | Real per-cell centroid + boundary the globe draws polygons from |
 | World | `POST /commands/export_recipe` | Wrapped (`src/api/world.ts`) but not yet surfaced in the UI — one line away from a "copy recipe" button |
 | Commands | `POST /commands/set_compute_backend` | Hot-swapping the compute backend from the UI |
 | Commands | `POST /commands/run_world_sweep` | "Run world sweep" panel — scores/deepens candidate seeds (separate from the live world above) |
@@ -101,13 +102,16 @@ the point where deck.gl's tradeoffs would flip and it'd be worth reconsidering.
 Closing the API's per-cell geometry/field/persisted-world gaps (issue #10) let this
 client stop faking data, but a few honest limits remain:
 
-1. **Centroid-only geometry, not polygons.** `ports/grid.py`'s `Grid` port exposes
-   cell centroids, area, neighbors, and edge length — but no cell-boundary vertex
-   accessor. `grid_geometry` therefore returns one `{lat, lng}` centroid per cell, not
-   a polygon outline, so `cell-geometry.ts` places cells as points and `scene.ts`
-   draws them as small billboarded discs (a soft radial-gradient sprite) rather than
-   true cell-shaped tiles. Closing this needs the `Grid` port extended with a
-   boundary-vertex method first.
+1. **Polygon fan triangulation, not a general renderer.** `grid_geometry` now returns
+   each cell's ordered boundary vertices alongside its centroid (issue #62), and
+   `cell-geometry.ts`/`scene.ts` draw true filled cell polygons — a fan of triangles
+   from the centroid to each consecutive pair of boundary vertices, merged into one
+   `THREE.BufferGeometry` draw call. This is correct for the convex hex/pentagon/quad
+   cells every current `Grid` backend returns, but it isn't a general polygon
+   triangulator (e.g. it would not handle a concave cell boundary). If a world's
+   geometry ever comes back without boundary data, `scene.ts` falls back to the
+   original centroid point cloud (small billboarded discs) so the globe still
+   renders something.
 2. **Borders and populations are summary-only.** `step_world` returns per-species
    population *totals* and per-civ population *totals* (`populations`,
    `civ_population` in `api/world_state.py`'s `step_persisted_world`) — there is no

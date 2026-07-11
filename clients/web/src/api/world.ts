@@ -45,8 +45,16 @@ export interface StepWorldResult {
   telemetry: Record<string, unknown>;
 }
 
-/** cell_id -> {lat, lng} centroid, in degrees (api/world_state.py grid_geometry()). */
-export type GridGeometry = Record<string, { lat: number; lng: number }>;
+/**
+ * cell_id -> {lat, lng, boundary}, in degrees (api/world_state.py grid_geometry()).
+ * `boundary` is the cell's ordered [lat, lng] boundary vertices — 6 per H3/ISEA
+ * hex, 5 for the 12 pentagons, 4 per S2 quad — so the globe can draw true cell
+ * polygons instead of just centroid points; see `src/globe/cell-geometry.ts`.
+ */
+export type GridGeometry = Record<
+  string,
+  { lat: number; lng: number; boundary: [number, number][] }
+>;
 
 /** cell_id -> field value (api/world_state.py query_field()). */
 export type FieldValues = Record<string, number>;
@@ -71,7 +79,7 @@ export function queryField(field: string): Promise<CommandResult<FieldValues>> {
   return runCommand("query_field", { field });
 }
 
-/** POST /commands/grid_geometry — cell_id -> centroid for every cell of the live world's grid. */
+/** POST /commands/grid_geometry — cell_id -> centroid + boundary for every cell of the live world's grid. */
 export function fetchGridGeometry(): Promise<CommandResult<GridGeometry>> {
   return runCommand("grid_geometry");
 }

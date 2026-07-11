@@ -5,12 +5,12 @@
  *
  * The globe now renders REAL data end-to-end: `ensureWorld` calls
  * `get_world`/`create_world` to get a live, persisted world; `loadWorld`
- * fetches its real `grid_geometry` centroids, and `renderField` fetches a
- * real `query_field` layer (height/temperature/precipitation); "Step"
- * advances the world via `step_world` and re-renders the current field.
- * See `src/api/world.ts` for the commands and `src/globe/cell-geometry.ts`
- * / `src/globe/field-layer.ts` for how their results become points and
- * colors.
+ * fetches its real `grid_geometry` centroids and boundary polygons, and
+ * `renderField` fetches a real `query_field` layer (height/temperature/
+ * precipitation); "Step" advances the world via `step_world` and re-renders
+ * the current field. See `src/api/world.ts` for the commands and
+ * `src/globe/cell-geometry.ts` / `src/globe/field-layer.ts` for how their
+ * results become cell polygons and colors.
  */
 
 import "./style.css";
