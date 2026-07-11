@@ -46,11 +46,26 @@ class RunTelemetryEvent(BaseModel):
     wall_seconds: float = 0.0
 
 
+class ComputeBackendChangedEvent(BaseModel):
+    """The live compute backend was hot-swapped (e.g. CPU numpy <-> GPU jax).
+
+    Broadcast so every viewer learns the sim's math moved devices; carries
+    the resolved backend, where its arrays live, and how many devices it
+    shards across.
+    """
+
+    type: Literal["compute_backend_changed"] = "compute_backend_changed"
+    backend: str = "numpy"
+    device: str = "cpu"
+    num_devices: int = 1
+
+
 EVENT_MODELS: dict[str, type[BaseModel]] = {
     "hello": HelloEvent,
     "setting_changed": SettingChangedEvent,
     "heartbeat": HeartbeatEvent,
     "run_telemetry": RunTelemetryEvent,
+    "compute_backend_changed": ComputeBackendChangedEvent,
 }
 """Every streamable event type, keyed by its ``type`` discriminator."""
 

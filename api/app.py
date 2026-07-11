@@ -31,6 +31,7 @@ from api.settings import Settings, get_setting, load_settings, setting_paths
 from api.state import AppState, EventBus
 from api.ws_events import HelloEvent, ws_schema
 from ports.access import Access, Principal
+from ports.array_backend import ComputeBackendUnavailableError
 
 _LOGGER = logging.getLogger("fableworldsim.api")
 
@@ -116,6 +117,10 @@ def _execute_command(command: Command, state: AppState, params: BaseModel) -> ob
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
+    except ComputeBackendUnavailableError as exc:
+        # Valid request the host cannot satisfy (e.g. a GPU backend on a
+        # CPU-only machine) — a conflict, not malformed input.
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 def _register_discovery(app: FastAPI, state: AppState, registry: CommandRegistry) -> None:
