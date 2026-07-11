@@ -202,3 +202,26 @@ def test_tidally_locked_ocean_has_high_ocean_fraction() -> None:
     """Tidally locked ocean preset has 90% ocean."""
     config = tidally_locked_ocean()
     assert config.ocean_fraction == 0.9
+
+
+@pytest.mark.slow
+def test_build_world_with_s2_backend() -> None:
+    """Build a world using the s2 grid backend (skip if s2sphere unavailable)."""
+    pytest.importorskip("s2sphere")
+    client = _client()
+    response = client.post(
+        "/commands/build_world",
+        json={
+            "seed": 42,
+            "preset_name": "earth",
+            "resolution": 1,
+            "season_count": 2,
+            "grid_backend": "s2",
+        },
+    )
+    assert response.status_code == _HTTP_OK
+    result = response.json()["result"]
+    assert result["seed"] == 42
+    assert result["preset"] == "earth"
+    assert result["grid_cell_count"] > 0
+    assert 0.0 <= result["ocean_fraction"] <= 1.0
