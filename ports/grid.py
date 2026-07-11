@@ -115,6 +115,17 @@ class Grid(ABC):
         """Return the centroid of ``cell`` as latitude/longitude degrees."""
 
     @abstractmethod
+    def boundary(self, cell: CellId) -> Sequence[LatLon]:
+        """Return ``cell``'s boundary vertices, in winding order.
+
+        The closing edge (last vertex back to the first) is implicit --
+        the sequence does not repeat the first point at the end. Vertex
+        count is topology-dependent (6 for H3/ISEA hexes, 5 for their 12
+        pentagons, 4 for S2 quads), so callers must not assume a fixed
+        count, mirroring the variable-degree contract of ``neighbors``.
+        """
+
+    @abstractmethod
     def cell_at(self, point: LatLon) -> CellId:
         """Return the id of the cell containing ``point``."""
 
