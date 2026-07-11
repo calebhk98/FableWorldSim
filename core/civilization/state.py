@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from core.civilization.settlements import Settlement
+    from ports.array_backend import ArrayBackend
     from ports.grid import CellId, Grid
 
 
@@ -66,14 +67,24 @@ def civ_by_id(state: WorldCivState, civ_id: str) -> Civilization:
     raise KeyError(msg)
 
 
-def civ_population_total(grid: Grid, civ: Civilization) -> float:
-    """Return the civ's total head count, area-weighted from the density field."""
+def civ_population_total(
+    grid: Grid,
+    civ: Civilization,
+    backend: ArrayBackend | None = None,
+) -> float:
+    """Return the civ's total head count, area-weighted from the density field.
+
+    Passing a sharded ``backend`` runs this planet-wide reduction across
+    every device; ``None`` uses the pure-Python path.  This is the seam
+    that lets the same call scale from a laptop to a multi-GPU host.
+    """
     cells = list(civ.population_per_m2)
     if not cells:
         return 0.0
     return area_weighted_total(
         [civ.population_per_m2[cell] for cell in cells],
         [grid.area_m2(cell) for cell in cells],
+        backend=backend,
     )
 
 
