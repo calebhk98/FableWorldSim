@@ -63,6 +63,7 @@ if TYPE_CHECKING:
     from core.civilization.species import SpeciesDefinition
     from core.civilization.tech import TechDefinition
     from core.climate.model import ClimateState
+    from core.hydrology.lakes import LakeNetwork
     from core.hydrology.sea_mask import SeaMask
     from ports.grid import CellId, Grid
 
@@ -234,6 +235,47 @@ def _mean_cell_area(grid: Grid) -> float:
     return sum(grid.area_m2(cell) for cell in cells) / len(cells)
 
 
+def assemble_coupled_run(
+    fast: FastWorld, seed: int, *, lakes: LakeNetwork | None = None
+) -> tuple[WorldState, CoupledContext, Orchestrator[WorldState]]:
+    """Seed biology + civilization on one world and register the coupled process.
+
+    The shared spine of both the batch deep-run (:func:`deepen_seed`) and the
+    persisted interactive world (:mod:`api.world_state`): build both layers'
+    contexts from the same content, seed the biosphere and found civs off one
+    forked RNG, and register :class:`~core.sim.coupling.CoupledProcess` on a
+    fresh orchestrator. Callers either run the orchestrator to completion or
+    hold it to step interactively. ``lakes`` (when routed) reaches biology as
+    aquatic habitat via ``LayersBelow``.
+    """
+    organisms, biomes = base_content()
+    species, resources, techs = civ_content()
+    below = LayersBelow(
+        fast.grid, fast.climate, fast.sea_mask, fast.heights_m, fast.biome_field, lakes
+    )
+    bio_ctx = build_biology_context(below, {org.species_id: org for org in organisms})
+    civ_ctx = CivContext(
+        grid=fast.grid,
+        heights_m=fast.heights_m,
+        sea_mask=fast.sea_mask,
+        species={spec.species_id: spec for spec in species},
+        techs=techs,
+        resources=resources,
+        biomass_capacity_kg_m2=biomass_capacity_from_biomes(
+            fast.biome_field, biomes, PEAK_BIOMASS_CAPACITY_KG_M2
+        ),
+    )
+    rng = SeededRng(seed)
+    state = WorldState(
+        biology=seed_biosphere(bio_ctx),
+        civ=found_civilizations(civ_ctx, rng.fork("founding")),
+    )
+    coupled_ctx = CoupledContext(bio_ctx=bio_ctx, civ_ctx=civ_ctx, organisms=organisms)
+    orchestrator: Orchestrator[WorldState] = Orchestrator()
+    orchestrator.register(CoupledProcess(coupled_ctx, rng))
+    return state, coupled_ctx, orchestrator
+
+
 def deepen_seed(
     seed: int,
     *,
@@ -284,31 +326,7 @@ def deepen_seed(
         lake_cells,
         precipitation_mm_yr=world.climate.annual_precipitation_mm_yr,
     )
-    organisms, biomes = base_content()
-    species, resources, techs = civ_content()
-    below = LayersBelow(
-        world.grid, world.climate, world.sea_mask, world.heights_m, world.biome_field, lakes
-    )
-    bio_ctx = build_biology_context(below, {org.species_id: org for org in organisms})
-    civ_ctx = CivContext(
-        grid=world.grid,
-        heights_m=world.heights_m,
-        sea_mask=world.sea_mask,
-        species={spec.species_id: spec for spec in species},
-        techs=techs,
-        resources=resources,
-        biomass_capacity_kg_m2=biomass_capacity_from_biomes(
-            world.biome_field, biomes, PEAK_BIOMASS_CAPACITY_KG_M2
-        ),
-    )
-    rng = SeededRng(seed)
-    state = WorldState(
-        biology=seed_biosphere(bio_ctx),
-        civ=found_civilizations(civ_ctx, rng.fork("founding")),
-    )
-    coupled_ctx = CoupledContext(bio_ctx=bio_ctx, civ_ctx=civ_ctx, organisms=organisms)
-    orchestrator: Orchestrator[WorldState] = Orchestrator()
-    orchestrator.register(CoupledProcess(coupled_ctx, rng))
+    state, _coupled_ctx, orchestrator = assemble_coupled_run(world, seed, lakes=lakes)
     state = orchestrator.run(state, ticks=ticks)
     telemetry = orchestrator.telemetry
 

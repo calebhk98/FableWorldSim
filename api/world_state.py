@@ -17,22 +17,14 @@ import dataclasses
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from adapters.rng_seeded import SeededRng
 from api.world_service import (
-    PEAK_BIOMASS_CAPACITY_KG_M2,
     FastWorld,
-    base_content,
+    assemble_coupled_run,
     build_world,
-    civ_content,
     resolve_planet,
 )
-from core.biology.context import LayersBelow, build_biology_context
-from core.biology.seed import seed_biosphere
-from core.civilization.context import CivContext
-from core.civilization.economy import biomass_capacity_from_biomes
-from core.civilization.founding import found_civilizations
 from core.civilization.state import civ_population_total
-from core.sim.coupling import CoupledContext, CoupledProcess, WorldState
+from core.sim.coupling import WorldState
 from core.sim.orchestrator import Orchestrator
 from core.sim.presets import earth
 from core.sim.recipe import WorldRecipe
@@ -105,29 +97,7 @@ def create_persisted_world(  # noqa: PLR0913 - one keyword param per create_worl
         planet=planet,
         grid_backend=grid_backend,
     )
-    organisms, biomes = base_content()
-    species, resources, techs = civ_content()
-    below = LayersBelow(fast.grid, fast.climate, fast.sea_mask, fast.heights_m, fast.biome_field)
-    bio_ctx = build_biology_context(below, {org.species_id: org for org in organisms})
-    civ_ctx = CivContext(
-        grid=fast.grid,
-        heights_m=fast.heights_m,
-        sea_mask=fast.sea_mask,
-        species={spec.species_id: spec for spec in species},
-        techs=techs,
-        resources=resources,
-        biomass_capacity_kg_m2=biomass_capacity_from_biomes(
-            fast.biome_field, biomes, PEAK_BIOMASS_CAPACITY_KG_M2
-        ),
-    )
-    rng = SeededRng(seed)
-    state = WorldState(
-        biology=seed_biosphere(bio_ctx),
-        civ=found_civilizations(civ_ctx, rng.fork("founding")),
-    )
-    coupled_ctx = CoupledContext(bio_ctx=bio_ctx, civ_ctx=civ_ctx, organisms=organisms)
-    orchestrator: Orchestrator[WorldState] = Orchestrator()
-    orchestrator.register(CoupledProcess(coupled_ctx, rng))
+    state, _coupled_ctx, orchestrator = assemble_coupled_run(fast, seed)
     return PersistedWorld(
         seed=seed,
         preset_name=preset_name,

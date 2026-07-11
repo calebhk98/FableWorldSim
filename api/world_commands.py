@@ -9,10 +9,11 @@ here just validates params and delegates to :mod:`api.world_state`.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
+from api.scenario_commands import WorldBuildParams
 from api.world_state import (
     create_persisted_world,
     export_recipe,
@@ -33,22 +34,12 @@ class _EmptyParams(BaseModel):
     """Empty params for the read commands below that take no arguments."""
 
 
-class CreateWorldParams(BaseModel):
-    """Arguments for create_world: seed + preset/custom planet + fidelity."""
+class CreateWorldParams(WorldBuildParams):
+    """Arguments for create_world; coarser default resolution than build_world."""
 
-    seed: int = Field(description="Random seed for terrain generation.")
-    preset_name: str | None = Field(
-        default="earth", description="Name of a scenario preset (earth, mars, venus, luna, etc)."
-    )
-    planet_config: dict[str, Any] | None = Field(
-        default=None,
-        description="Full PlanetConfig dict; if provided, overrides preset_name.",
-    )
     resolution: int = Field(
         default=0, ge=0, le=4, description="Grid resolution (0 = 122 cells, coarsest/fastest)."
     )
-    season_count: int = Field(default=2, ge=1, le=4, description="Number of seasons to simulate.")
-    grid_backend: str = Field(default="h3", description="Grid backend: h3 (default), s2, or isea.")
 
 
 class StepWorldParams(BaseModel):

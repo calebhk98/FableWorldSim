@@ -24,11 +24,13 @@ class ListScenariosParams(BaseModel):
     """Arguments for list_scenarios (empty)."""
 
 
-class BuildWorldParams(BaseModel):
-    """Arguments for build_world command.
+class WorldBuildParams(BaseModel):
+    """Shared world-building args: seed + preset/custom planet + fidelity.
 
-    Either specify preset_name for a built-in scenario, or provide a full
-    planet_config dict matching PlanetConfig schema.
+    The common base for the ``build_world`` and ``create_world`` commands so
+    the two never drift; subclasses tweak only defaults (e.g. resolution).
+    Either specify ``preset_name`` for a built-in scenario, or provide a full
+    ``planet_config`` dict matching the PlanetConfig schema.
     """
 
     seed: int = Field(description="Random seed for terrain generation.")
@@ -44,6 +46,10 @@ class BuildWorldParams(BaseModel):
     )
     season_count: int = Field(default=2, ge=1, le=4, description="Number of seasons to simulate.")
     grid_backend: str = Field(default="h3", description="Grid backend: h3 (default), s2, or isea.")
+
+
+class BuildWorldParams(WorldBuildParams):
+    """Arguments for the build_world command (see :class:`WorldBuildParams`)."""
 
 
 def scenario_summaries() -> list[dict[str, object]]:
