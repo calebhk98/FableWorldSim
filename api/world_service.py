@@ -149,15 +149,17 @@ def build_world(
     resolution: int,
     season_count: int,
     planet: PlanetConfig | None = None,
+    grid_backend: str = "h3",
 ) -> FastWorld:
     """Generate one world from a seed at the given grid + seasonal fidelity.
 
     If planet is None, defaults to Earth.
+    The grid_backend defaults to "h3" for backward compatibility.
     """
     _organisms, biomes = _content()
     if planet is None:
         planet = earth()
-    grid = create_grid("h3", resolution=resolution, radius_m=planet.radius_m)
+    grid = create_grid(grid_backend, resolution=resolution, radius_m=planet.radius_m)
     heights = dict(ProceduralTopography(SeededRng(seed)).heights(grid))
     sea_mask = build_sea_mask(grid, heights, planet.ocean_fraction, planet.tidal_range_m)
     climate = simulate_climate(grid, planet, heights, sea_mask, season_count=season_count)
@@ -168,10 +170,20 @@ def build_world(
 
 
 def evaluate_seed(
-    seed: int, *, resolution: int = _DEFAULT_RESOLUTION, planet: PlanetConfig | None = None
+    seed: int,
+    *,
+    resolution: int = _DEFAULT_RESOLUTION,
+    planet: PlanetConfig | None = None,
+    grid_backend: str = "h3",
 ) -> tuple[float, dict[str, float]]:
     """Fast-score a seed by habitability (the cheap preview)."""
-    world = build_world(seed, resolution=resolution, season_count=_FAST_SEASONS, planet=planet)
+    world = build_world(
+        seed,
+        resolution=resolution,
+        season_count=_FAST_SEASONS,
+        planet=planet,
+        grid_backend=grid_backend,
+    )
     return habitability_score(
         world.grid, world.biome_field, world.climate.annual_mean_temperature_k, world.sea_mask
     )
@@ -189,6 +201,7 @@ def deepen_seed(
     resolution: int = _DEFAULT_RESOLUTION,
     ticks: int = _DEFAULT_DEEP_TICKS,
     planet: PlanetConfig | None = None,
+    grid_backend: str = "h3",
 ) -> dict[str, object]:
     """Run the expensive simulation on one winner and summarize it.
 
@@ -199,7 +212,13 @@ def deepen_seed(
     draw down what the food web itself depends on. Captures wall-clock
     telemetry and returns a JSON-able summary.
     """
-    world = build_world(seed, resolution=resolution, season_count=_DEEP_SEASONS, planet=planet)
+    world = build_world(
+        seed,
+        resolution=resolution,
+        season_count=_DEEP_SEASONS,
+        planet=planet,
+        grid_backend=grid_backend,
+    )
     rivers = build_river_network(
         world.grid,
         world.heights_m,
@@ -266,16 +285,23 @@ def run_world_sweep(  # noqa: PLR0913 - one keyword param per sweep knob
     resolution: int = _DEFAULT_RESOLUTION,
     deep_ticks: int = _DEFAULT_DEEP_TICKS,
     planet: PlanetConfig | None = None,
+    grid_backend: str = "h3",
 ) -> SweepReport:
     """Sweep ``count`` seeds, keep the best ``keep_top_k``, and deep-sim them."""
 
     def evaluate(seed: int) -> tuple[float, dict[str, float]]:
         """Fast-score one seed at the sweep's resolution."""
-        return evaluate_seed(seed, resolution=resolution, planet=planet)
+        return evaluate_seed(seed, resolution=resolution, planet=planet, grid_backend=grid_backend)
 
     def deepen(seed: int) -> dict[str, object]:
         """Deep-sim one winning seed at the sweep's fidelity."""
-        return deepen_seed(seed, resolution=resolution, ticks=deep_ticks, planet=planet)
+        return deepen_seed(
+            seed,
+            resolution=resolution,
+            ticks=deep_ticks,
+            planet=planet,
+            grid_backend=grid_backend,
+        )
 
     return run_sweep(_seeds(base_seed, count), evaluate, keep_top_k, deepen=deepen)
 

@@ -92,3 +92,27 @@ def test_sweep_command_runs_over_the_api_and_surfaces_telemetry() -> None:
 
     # The winner's deep-run telemetry is surfaced on /metrics.
     assert client.get("/metrics").json()["sim"]["ticks"] == 1
+
+
+@pytest.mark.slow
+def test_evaluate_seed_with_s2_backend() -> None:
+    """Evaluate a seed using the s2 grid backend (skip if s2sphere unavailable)."""
+    pytest.importorskip("s2sphere")
+    score, details = evaluate_seed(1, resolution=_RES, grid_backend="s2")
+    assert 0.0 <= score <= 1.0
+    assert details["score"] == pytest.approx(score)
+    assert 0.0 <= details["ocean_fraction"] <= 1.0
+
+
+@pytest.mark.slow
+def test_deepen_seed_with_s2_backend() -> None:
+    """Deep-sim a seed using the s2 grid backend (skip if s2sphere unavailable)."""
+    pytest.importorskip("s2sphere")
+    result = deepen_seed(1, resolution=_RES, ticks=_TICKS, grid_backend="s2")
+    assert result["seed"] == 1
+    assert result["biology_ticks"] == _TICKS
+    assert result["channel_count"] >= 0
+    telemetry = result["telemetry"]
+    assert isinstance(telemetry, dict)
+    assert telemetry["ticks"] == _TICKS
+    assert telemetry["ticks_per_second"] > 0.0

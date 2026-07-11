@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from api.world_service import build_world, get_all_presets
 from core.sim.planet_config import PlanetConfig
+from ports.grid import GridBackendUnavailableError
 
 if TYPE_CHECKING:
     from api.state import AppState
@@ -43,6 +44,7 @@ class BuildWorldParams(BaseModel):
         default=1, ge=0, le=4, description="Grid resolution (coarser = faster)."
     )
     season_count: int = Field(default=2, ge=1, le=4, description="Number of seasons to simulate.")
+    grid_backend: str = Field(default="h3", description="Grid backend: h3 (default), s2, or isea.")
 
 
 def scenario_summaries() -> list[dict[str, object]]:
@@ -85,12 +87,18 @@ def build_world_command(state: AppState, params: BaseModel) -> object:
             raise KeyError(f"unknown preset {params.preset_name!r}; known: {known}")
         planet, _description = presets[params.preset_name]
 
-    world = build_world(
-        params.seed,
-        resolution=params.resolution,
-        season_count=params.season_count,
-        planet=planet,
-    )
+    try:
+        world = build_world(
+            params.seed,
+            resolution=params.resolution,
+            season_count=params.season_count,
+            planet=planet,
+            grid_backend=params.grid_backend,
+        )
+    except GridBackendUnavailableError as exc:
+        raise ValueError(f"grid backend unavailable: {exc}") from exc
+    except ValueError as exc:
+        raise ValueError(f"invalid grid backend: {exc}") from exc
 
     planet_name = planet.name if planet is not None else "Unknown"
 
