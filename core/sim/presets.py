@@ -13,7 +13,6 @@ from core.sim.constants import (
     AU_M,
     EARTH_AXIAL_TILT_DEG,
     EARTH_GRAVITY_M_S2,
-    EARTH_GREENHOUSE_OFFSET_K,
     EARTH_OCEAN_FRACTION,
     EARTH_ORBITAL_PERIOD_S,
     EARTH_RADIUS_M,
@@ -39,8 +38,12 @@ def earth() -> PlanetConfig:
         ocean_fraction=EARTH_OCEAN_FRACTION,
         atmosphere=Atmosphere(
             surface_pressure_pa=EARTH_SURFACE_PRESSURE_PA,
-            greenhouse_offset_k=EARTH_GREENHOUSE_OFFSET_K,
-            composition={"N2": 0.781, "O2": 0.209, "Ar": 0.009, "CO2": 0.0004},
+            # H2O is a global-mean effective tropospheric water-vapor
+            # mole fraction (M1 doesn't model a moist atmosphere), the
+            # dominant term in the ~33 K greenhouse warming this
+            # composition now derives (see Atmosphere.greenhouse_offset_k)
+            # rather than a hand-supplied literal.
+            composition={"N2": 0.773, "O2": 0.209, "Ar": 0.009, "CO2": 0.0004, "H2O": 0.008},
         ),
         satellites=(
             Satellite(
@@ -66,7 +69,6 @@ def mars() -> PlanetConfig:
         ocean_fraction=0.0,
         atmosphere=Atmosphere(
             surface_pressure_pa=610.0,
-            greenhouse_offset_k=5.0,
             composition={"CO2": 0.9532, "N2": 0.027, "Ar": 0.016},
         ),
         satellites=(
@@ -90,7 +92,6 @@ def venus() -> PlanetConfig:
         ocean_fraction=0.0,
         atmosphere=Atmosphere(
             surface_pressure_pa=9.3e6,
-            greenhouse_offset_k=505.0,
             composition={"CO2": 0.965, "N2": 0.035},
         ),
         stellar_luminosity_w=SOLAR_LUMINOSITY_W,
@@ -132,7 +133,6 @@ def tidally_locked_ocean() -> PlanetConfig:
         ocean_fraction=0.9,
         atmosphere=Atmosphere(
             surface_pressure_pa=EARTH_SURFACE_PRESSURE_PA,
-            greenhouse_offset_k=30.0,
             composition={"N2": 0.9, "CO2": 0.1},
         ),
         insolation_wm2=1_100.0,
@@ -154,9 +154,11 @@ def high_tilt() -> PlanetConfig:
         orbital_period_s=EARTH_ORBITAL_PERIOD_S,
         ocean_fraction=EARTH_OCEAN_FRACTION,
         atmosphere=Atmosphere(
+            # Same Earth-like trace greenhouse gases as ``earth()``, so
+            # this scenario's warmth comes from the same derived physics
+            # and axial tilt is the only thing being varied.
             surface_pressure_pa=EARTH_SURFACE_PRESSURE_PA,
-            greenhouse_offset_k=EARTH_GREENHOUSE_OFFSET_K,
-            composition={"N2": 0.78, "O2": 0.21},
+            composition={"N2": 0.772, "O2": 0.21, "Ar": 0.009, "CO2": 0.0004, "H2O": 0.008},
         ),
         stellar_luminosity_w=SOLAR_LUMINOSITY_W,
         orbital_distance_m=AU_M,
@@ -179,9 +181,12 @@ def fantasy_default() -> PlanetConfig:
         orbital_period_s=EARTH_ORBITAL_PERIOD_S,
         ocean_fraction=0.65,
         atmosphere=Atmosphere(
+            # A touch more CO2 and water vapor than Earth's -- "gentle
+            # Earth-plus" -- so the greenhouse warming this derives is
+            # slightly above Earth's, matching the "warmer and wetter"
+            # design intent without a hand-supplied literal.
             surface_pressure_pa=EARTH_SURFACE_PRESSURE_PA,
-            greenhouse_offset_k=36.0,
-            composition={"N2": 0.77, "O2": 0.22},
+            composition={"N2": 0.7694, "O2": 0.22, "CO2": 0.0006, "H2O": 0.01},
         ),
         satellites=(
             Satellite(name="Aster", mass_kg=4.0e22, semi_major_axis_m=3.0e8),

@@ -63,6 +63,39 @@ def gradient(
     return (2.0 * east / count, 2.0 * north / count)
 
 
+def divergence(
+    field: Mapping[CellId, Vector2],
+    grid: Grid,
+    cell: CellId,
+) -> float:
+    """Return the local divergence (per second) of a vector field at a cell.
+
+    Finite-volume / discrete Gauss form: for each shared edge, take the
+    average of the two cells' vectors, project it onto the direction
+    toward that neighbor (an outward-normal proxy that is exact for a
+    Voronoi-like mesh), multiply by the edge length, sum over every
+    neighbor, and divide by the cell's area — degree-agnostic, so it is
+    correct at pentagons, hexes, and quads alike (mirrors the edge
+    weighting in ``core.grid.flux.diffusion_step``).
+
+    Positive means net outflow (divergence: subsiding, drying air);
+    negative means net inflow (convergence: rising, moisture-piling
+    air) — the sign convention ``core.climate.moisture`` relies on to
+    turn wind convergence into rainout.
+    """
+    origin = grid.centroid(cell)
+    value = field[cell]
+    total_flux = 0.0
+    for neighbor in grid.neighbors(cell):
+        direction = unit_direction(origin, grid.centroid(neighbor), grid.radius_m)
+        neighbor_value = field[neighbor]
+        avg_east = (value[0] + neighbor_value[0]) / 2.0
+        avg_north = (value[1] + neighbor_value[1]) / 2.0
+        normal_component = avg_east * direction[0] + avg_north * direction[1]
+        total_flux += normal_component * grid.edge_length_m(cell, neighbor)
+    return total_flux / grid.area_m2(cell)
+
+
 def rotate(vector: Vector2, angle_rad: float) -> Vector2:
     """Return the vector rotated counterclockwise by ``angle_rad``."""
     east, north = vector
