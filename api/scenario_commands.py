@@ -77,7 +77,7 @@ def build_world_command(state: AppState, params: BaseModel) -> object:
     planet = None
     if params.planet_config is not None:
         try:
-            planet = PlanetConfig(**params.planet_config)
+            planet = PlanetConfig.from_dict(params.planet_config)
         except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid planet_config: {exc}") from exc
     elif params.preset_name:

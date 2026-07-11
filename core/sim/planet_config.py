@@ -41,6 +41,30 @@ _TIDAL_LOCK_REL_TOL = 1e-6
 _LUNAR_TIDAL_FORCING = MOON_MASS_KG / MOON_SEMI_MAJOR_AXIS_M**3
 
 
+def _coerce_satellites(sats: object) -> tuple[Satellite, ...]:
+    """Convert satellites field: list of dicts or Satellite -> tuple of Satellite.
+
+    Raises ValueError if invalid.
+    """
+    if not isinstance(sats, (list, tuple)):
+        msg = f"satellites must be list/tuple, got {type(sats).__name__}"
+        raise ValueError(msg)
+    sat_list = []
+    for sat in sats:
+        if isinstance(sat, dict):
+            try:
+                sat_list.append(Satellite(**sat))
+            except (TypeError, ValueError) as exc:
+                msg = f"invalid satellite specification: {exc}"
+                raise ValueError(msg) from exc
+        elif isinstance(sat, Satellite):
+            sat_list.append(sat)
+        else:
+            msg = f"satellite must be dict/Satellite, got {type(sat).__name__}"
+            raise ValueError(msg)
+    return tuple(sat_list)
+
+
 @dataclass(frozen=True)
 class Atmosphere:
     """Bulk atmosphere: composition, surface pressure, greenhouse strength.
@@ -211,3 +235,49 @@ class PlanetConfig:
         """
         forcing = sum(moon.tidal_forcing for moon in self.satellites)
         return LUNAR_EQUILIBRIUM_TIDE_M * forcing / _LUNAR_TIDAL_FORCING
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> PlanetConfig:
+        """Construct PlanetConfig from a dict, coercing nested dicts to dataclasses.
+
+        Converts nested ``atmosphere`` and ``satellites`` dicts to their
+        respective dataclass types. Raises ``ValueError`` if invalid.
+
+        This is the robust path for round-tripping: pass the result of
+        ``dataclasses.asdict(preset)`` here to reconstruct the config.
+
+        Args:
+            data: A dict with ``atmosphere`` and ``satellites`` optionally
+                as dicts instead of objects.
+
+        Returns:
+            A validated PlanetConfig instance.
+
+        Raises:
+            ValueError: If the dict is structurally invalid.
+        """
+        params = dict(data)
+
+        # Coerce atmosphere: dict -> Atmosphere, or validate it's an Atmosphere
+        if "atmosphere" in params:
+            atm = params["atmosphere"]
+            if isinstance(atm, dict):
+                try:
+                    params["atmosphere"] = Atmosphere(**atm)
+                except (TypeError, ValueError) as exc:
+                    msg = f"invalid atmosphere specification: {exc}"
+                    raise ValueError(msg) from exc
+            elif not isinstance(atm, Atmosphere):
+                msg = f"atmosphere must be a dict or Atmosphere, got {type(atm).__name__}"
+                raise ValueError(msg)
+
+        # Coerce satellites: list of dicts -> tuple of Satellite
+        if "satellites" in params:
+            params["satellites"] = _coerce_satellites(params["satellites"])
+
+        # Construct PlanetConfig, converting TypeError to ValueError.
+        try:
+            return cls(**params)
+        except TypeError as exc:
+            msg = f"missing or invalid field in planet config: {exc}"
+            raise ValueError(msg) from exc

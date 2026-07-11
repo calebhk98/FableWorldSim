@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 pytest.importorskip("fastapi")
@@ -12,6 +14,7 @@ from fastapi.testclient import TestClient
 from api.app import create_app
 from api.settings import Settings
 from api.world_service import get_all_presets
+from core.sim.planet_config import PlanetConfig
 from core.sim.presets import earth, luna, mars, tidally_locked_ocean
 
 _HTTP_OK = 200
@@ -225,3 +228,156 @@ def test_build_world_with_s2_backend() -> None:
     assert result["preset"] == "earth"
     assert result["grid_cell_count"] > 0
     assert 0.0 <= result["ocean_fraction"] <= 1.0
+
+
+def test_build_world_with_custom_planet_config_round_trip() -> None:
+    """Build a world from a full custom planet_config (round-tripped via asdict)."""
+    preset = mars()
+    planet_dict = dataclasses.asdict(preset)
+    client = _client()
+    response = client.post(
+        "/commands/build_world",
+        json={
+            "seed": 42,
+            "planet_config": planet_dict,
+            "resolution": 1,
+            "season_count": 2,
+        },
+    )
+    assert response.status_code == _HTTP_OK
+    result = response.json()["result"]
+    assert result["planet_name"] == "Mars"
+    assert result["seed"] == 42
+    assert result["grid_cell_count"] > 0
+
+
+def test_build_world_with_earth_config_round_trip() -> None:
+    """Build Earth from a custom config round-trip."""
+    preset = earth()
+    planet_dict = dataclasses.asdict(preset)
+    client = _client()
+    response = client.post(
+        "/commands/build_world",
+        json={
+            "seed": 99,
+            "planet_config": planet_dict,
+            "resolution": 1,
+            "season_count": 2,
+        },
+    )
+    assert response.status_code == _HTTP_OK
+    result = response.json()["result"]
+    assert result["planet_name"] == "Earth"
+    assert result["seed"] == 99
+
+
+def test_invalid_planet_config_missing_required_field_returns_422() -> None:
+    """Invalid planet_config (missing required field) returns 422, not 500."""
+    client = _client()
+    response = client.post(
+        "/commands/build_world",
+        json={
+            "seed": 42,
+            "planet_config": {"ocean_fraction": 0.5},
+            "resolution": 1,
+            "season_count": 2,
+        },
+    )
+    assert 400 <= response.status_code < 500
+
+
+def test_invalid_planet_config_bad_atmosphere_type_returns_422() -> None:
+    """Invalid planet_config (bad atmosphere type) returns 422, not 500."""
+    client = _client()
+    response = client.post(
+        "/commands/build_world",
+        json={
+            "seed": 42,
+            "planet_config": {
+                "name": "BadPlanet",
+                "radius_m": 6.4e6,
+                "surface_gravity_m_s2": 9.8,
+                "axial_tilt_deg": 23.5,
+                "rotation_period_s": 86400.0,
+                "orbital_period_s": 365.25 * 86400.0,
+                "ocean_fraction": 0.5,
+                "atmosphere": "not a dict",
+                "insolation_wm2": 1361.0,
+            },
+            "resolution": 1,
+            "season_count": 2,
+        },
+    )
+    assert 400 <= response.status_code < 500
+
+
+def test_invalid_planet_config_bad_satellites_type_returns_422() -> None:
+    """Invalid planet_config (bad satellites type) returns 422, not 500."""
+    client = _client()
+    response = client.post(
+        "/commands/build_world",
+        json={
+            "seed": 42,
+            "planet_config": {
+                "name": "BadPlanet",
+                "radius_m": 6.4e6,
+                "surface_gravity_m_s2": 9.8,
+                "axial_tilt_deg": 23.5,
+                "rotation_period_s": 86400.0,
+                "orbital_period_s": 365.25 * 86400.0,
+                "ocean_fraction": 0.5,
+                "atmosphere": {"surface_pressure_pa": 101325.0},
+                "satellites": "not a list",
+                "insolation_wm2": 1361.0,
+            },
+            "resolution": 1,
+            "season_count": 2,
+        },
+    )
+    assert 400 <= response.status_code < 500
+
+
+def test_planet_config_from_dict_with_atmosphere_dict() -> None:
+    """PlanetConfig.from_dict coerces atmosphere dict to Atmosphere."""
+    config = earth()
+    planet_dict = dataclasses.asdict(config)
+    reconstructed = PlanetConfig.from_dict(planet_dict)
+    assert reconstructed.name == config.name
+    assert reconstructed.radius_m == config.radius_m
+    assert reconstructed.atmosphere.surface_pressure_pa == config.atmosphere.surface_pressure_pa
+
+
+def test_planet_config_from_dict_with_satellites_dicts() -> None:
+    """PlanetConfig.from_dict coerces satellite dicts to Satellite objects."""
+    config = mars()
+    planet_dict = dataclasses.asdict(config)
+    reconstructed = PlanetConfig.from_dict(planet_dict)
+    assert len(reconstructed.satellites) == len(config.satellites)
+    for orig, reconst in zip(config.satellites, reconstructed.satellites, strict=True):
+        assert reconst.name == orig.name
+        assert reconst.mass_kg == orig.mass_kg
+        assert reconst.semi_major_axis_m == orig.semi_major_axis_m
+
+
+def test_planet_config_from_dict_missing_required_field_raises_value_error() -> None:
+    """PlanetConfig.from_dict raises ValueError when required field is missing."""
+    bad_dict = {"name": "BadPlanet", "radius_m": 6.4e6}
+    with pytest.raises(ValueError):
+        PlanetConfig.from_dict(bad_dict)
+
+
+def test_planet_config_from_dict_invalid_atmosphere_raises_value_error() -> None:
+    """PlanetConfig.from_dict raises ValueError for invalid atmosphere."""
+    bad_dict = {
+        "name": "BadPlanet",
+        "radius_m": 6.4e6,
+        "surface_gravity_m_s2": 9.8,
+        "axial_tilt_deg": 23.5,
+        "rotation_period_s": 86400.0,
+        "orbital_period_s": 365.25 * 86400.0,
+        "ocean_fraction": 0.5,
+        "atmosphere": {"surface_pressure_pa": -100},
+        "insolation_wm2": 1361.0,
+    }
+    with pytest.raises(ValueError):
+        PlanetConfig.from_dict(bad_dict)
