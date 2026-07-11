@@ -56,3 +56,35 @@ class ArrayBackend(ABC):
     def to_list(self, array: Any) -> list[float]:
         """Return an array's contents as a plain list of floats."""
         return [float(value) for value in list(array)]
+
+    @property
+    def num_devices(self) -> int:
+        """Return how many devices fields can be sharded across.
+
+        One for single-device backends (numpy, cupy); the count of visible
+        accelerators for a device-mesh backend (jax).  The auto-scaler's
+        ``device_count`` recommendation is the *target*; this is what the
+        backend can actually reach right now.
+        """
+        return 1
+
+    def shard(self, array: Any, axis: int = 0) -> Any:
+        """Return ``array`` partitioned across all devices along ``axis``.
+
+        The default is a single-device identity — the array is returned
+        unchanged.  Device-mesh backends override this to split a per-cell
+        field across the machine's GPUs while keeping it an ordinary
+        Array-API value, so callers never handle placement themselves
+        ("the backend hides which device holds which shard").  A backend
+        that cannot split evenly must degrade to a whole (unsharded)
+        placement rather than raise — results stay correct, just local.
+        """
+        return array
+
+    def shard_devices(self, array: Any) -> int:
+        """Return how many devices hold a piece of ``array`` (1 if local).
+
+        Lets orchestration and tests confirm a field was actually
+        distributed instead of silently kept on one device.
+        """
+        return 1
