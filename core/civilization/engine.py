@@ -24,6 +24,7 @@ from core.civilization.state import WorldCivState, civ_population_total, territo
 from core.civilization.tech import available_techs, choose_research, combined_effects
 from core.civilization.terrain import cost_distances, subsurface_cost_field, surface_cost_field
 from core.sim.constants import SECONDS_PER_YEAR
+from core.sim.process import BoundProcess
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -224,20 +225,9 @@ def step_civilization(
     return replace(state, tick=state.tick + 1)
 
 
-class CivilizationProcess:
-    """Orchestrator process wrapper binding context, RNG, and chronicle."""
+class CivilizationProcess(BoundProcess["WorldCivState", "CivContext"]):
+    """Orchestrator process for the civilization layer (see :class:`BoundProcess`)."""
 
     def __init__(self, ctx: CivContext, rng: Rng, chronicle: Chronicle | None = None) -> None:
-        """Fork a dedicated RNG stream so other layers stay unperturbed."""
-        self._ctx = ctx
-        self._rng = rng.fork(PROCESS_NAME)
-        self._chronicle = chronicle
-
-    @property
-    def name(self) -> str:
-        """Return the process name shown by the orchestrator."""
-        return PROCESS_NAME
-
-    def step(self, state: WorldCivState, dt_s: float) -> WorldCivState:
-        """Advance the civilization layer by one orchestrator step."""
-        return step_civilization(state, self._ctx, self._rng, dt_s, self._chronicle)
+        """Bind the civilization step to its context and a forked RNG stream."""
+        super().__init__(PROCESS_NAME, ctx, rng, chronicle, step_civilization)

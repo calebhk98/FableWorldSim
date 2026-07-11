@@ -1,0 +1,47 @@
+# Sparrow — a small, prolific seed-eating songbird found nearly
+# everywhere.  Display name is the Fluent key species-sparrow in
+# content/locales.
+sapient = false
+domain = "surface"
+growth_rate_per_year = 0.4
+commit_fraction = 0.0
+
+medium = "aerial"
+body_mass_kg = 0.03
+crowding_cap_per_m2 = 2e-3
+lifespan_years = 4
+maturity_years = 0.5
+litter_size = 4
+reproduction = "sexual"
+min_viable_population = 2
+color = "#B79A6E"
+
+[traits.temperature_k]
+comfort_min = 275
+comfort_max = 305
+tolerance_min = 255
+tolerance_max = 318
+spread = 5.0
+
+[traits.precipitation_mm_yr]
+comfort_min = 250
+comfort_max = 1600
+tolerance_min = 50
+tolerance_max = 3500
+spread = 150
+
+[traits.altitude_m]
+comfort_min = 0
+comfort_max = 2000
+tolerance_min = -200
+tolerance_max = 4500
+spread = 200
+
+[biome_preference]
+temperate_grassland = 0.9
+temperate_forest = 0.8
+savanna = 0.7
+
+[diet]
+grass = 0.7
+oak = 0.2

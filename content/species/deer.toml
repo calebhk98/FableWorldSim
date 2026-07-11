@@ -1,0 +1,47 @@
+# Deer — a forest-edge browsing herbivore, quick to mature and quick to
+# breed.  Display name is the Fluent key species-deer in content/locales.
+sapient = false
+domain = "surface"
+growth_rate_per_year = 0.3
+commit_fraction = 0.0
+
+medium = "terrestrial"
+body_mass_kg = 60
+crowding_cap_per_m2 = 5e-4
+lifespan_years = 12
+maturity_years = 2
+litter_size = 1.6
+reproduction = "sexual"
+min_viable_population = 2
+color = "#A0703C"
+
+[traits.temperature_k]
+comfort_min = 278
+comfort_max = 300
+tolerance_min = 260
+tolerance_max = 313
+spread = 5.0
+
+[traits.precipitation_mm_yr]
+comfort_min = 400
+comfort_max = 1600
+tolerance_min = 100
+tolerance_max = 3000
+spread = 150
+
+[traits.altitude_m]
+comfort_min = 0
+comfort_max = 2200
+tolerance_min = -200
+tolerance_max = 4200
+spread = 200
+
+[biome_preference]
+temperate_forest = 1.0
+temperate_rainforest = 0.7
+taiga = 0.5
+temperate_grassland = 0.5
+
+[diet]
+oak = 0.8
+grass = 0.6

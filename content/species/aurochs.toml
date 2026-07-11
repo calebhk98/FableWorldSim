@@ -1,0 +1,46 @@
+# Aurochs — a large wild grazer of open plains and grassland, the wild
+# ancestor of cattle.  Display name is the Fluent key species-aurochs in
+# content/locales.
+sapient = false
+domain = "surface"
+growth_rate_per_year = 0.2
+commit_fraction = 0.0
+
+medium = "terrestrial"
+body_mass_kg = 700
+crowding_cap_per_m2 = 8e-5
+lifespan_years = 20
+maturity_years = 3
+litter_size = 1.0
+reproduction = "sexual"
+min_viable_population = 2
+color = "#4A3A2C"
+
+[traits.temperature_k]
+comfort_min = 280
+comfort_max = 303
+tolerance_min = 263
+tolerance_max = 315
+spread = 5.0
+
+[traits.precipitation_mm_yr]
+comfort_min = 300
+comfort_max = 1200
+tolerance_min = 80
+tolerance_max = 2500
+spread = 150
+
+[traits.altitude_m]
+comfort_min = 0
+comfort_max = 2000
+tolerance_min = -200
+tolerance_max = 4000
+spread = 200
+
+[biome_preference]
+temperate_grassland = 1.0
+savanna = 0.9
+tropical_dry_forest = 0.3
+
+[diet]
+grass = 1.0

@@ -1,0 +1,44 @@
+# Dragon — a fantastical, long-lived aerial apex predator, vanishingly
+# rare and hardy across almost any climate.  Display name is the Fluent
+# key species-dragon in content/locales.
+sapient = false
+domain = "surface"
+growth_rate_per_year = 0.1
+commit_fraction = 0.0
+
+medium = "aerial"
+body_mass_kg = 2000
+crowding_cap_per_m2 = 1e-9
+lifespan_years = 500
+maturity_years = 40
+litter_size = 1.2
+reproduction = "sexual"
+min_viable_population = 2
+oscillatory = true
+color = "#7A1F1F"
+
+[traits.temperature_k]
+comfort_min = 270
+comfort_max = 315
+tolerance_min = 245
+tolerance_max = 330
+spread = 8.0
+
+[traits.precipitation_mm_yr]
+comfort_min = 100
+comfort_max = 2000
+tolerance_min = 20
+tolerance_max = 4000
+spread = 200
+
+[traits.altitude_m]
+comfort_min = -100
+comfort_max = 4000
+tolerance_min = -200
+tolerance_max = 6000
+spread = 300
+
+[diet]
+lion = 0.5
+aurochs = 0.6
+deer = 0.7

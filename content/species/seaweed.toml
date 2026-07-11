@@ -1,0 +1,23 @@
+# Seaweed — a fast-growing aquatic autotroph anchoring coastal food webs.
+# Display name is the Fluent key species-seaweed in content/locales.
+sapient = false
+domain = "surface"
+growth_rate_per_year = 0.4
+commit_fraction = 0.0
+
+medium = "aquatic"
+body_mass_kg = 1.0
+crowding_cap_per_m2 = 1.5
+lifespan_years = 3
+maturity_years = 0.5
+litter_size = 40
+reproduction = "asexual"
+min_viable_population = 1
+color = "#2E8B6E"
+
+[traits.temperature_k]
+comfort_min = 275
+comfort_max = 300
+tolerance_min = 271
+tolerance_max = 305
+spread = 3.0
