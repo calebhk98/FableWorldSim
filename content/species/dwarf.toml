@@ -12,8 +12,27 @@ color = "#8A6E9E"
 toponym_prefixes = ["Khaz", "Bar", "Grim", "Thorin", "Dur", "Kara"]
 toponym_suffixes = ["dun", "zad", "heim", "forge", "delve", "grond"]
 
+# Ecology (read by the biology loader): a subterranean grazer of
+# cave-fungus, buffered from surface climate swings.
+medium = "subterranean"
+body_mass_kg = 65
+crowding_cap_per_m2 = 8e-5
+lifespan_years = 120
+maturity_years = 20
+litter_size = 1.0
+
 [propensity]
 mining = 2.5
 ironworking = 2.0
 engineering = 1.5
 sailing = 0.2
+
+[traits.temperature_k]
+comfort_min = 278
+comfort_max = 295
+tolerance_min = 268
+tolerance_max = 305
+spread = 5.0
+
+[diet]
+cave_moss = 1.0

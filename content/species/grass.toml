@@ -1,0 +1,43 @@
+# Grass — a fast-growing, short-lived grassland tussock; the base of the
+# food web for grazers.  Display name is the Fluent key species-grass in
+# content/locales.
+sapient = false
+domain = "surface"
+growth_rate_per_year = 0.3
+commit_fraction = 0.0
+
+medium = "terrestrial"
+body_mass_kg = 0.5
+crowding_cap_per_m2 = 2.0
+lifespan_years = 2
+maturity_years = 0.3
+litter_size = 50
+reproduction = "asexual"
+min_viable_population = 1
+color = "#8FC35E"
+
+[traits.temperature_k]
+comfort_min = 280
+comfort_max = 305
+tolerance_min = 260
+tolerance_max = 318
+spread = 5.0
+
+[traits.precipitation_mm_yr]
+comfort_min = 300
+comfort_max = 1200
+tolerance_min = 100
+tolerance_max = 2500
+spread = 150
+
+[traits.altitude_m]
+comfort_min = 0
+comfort_max = 1800
+tolerance_min = -200
+tolerance_max = 4000
+spread = 200
+
+[biome_preference]
+temperate_grassland = 1.0
+savanna = 1.0
+tropical_dry_forest = 0.4

@@ -25,6 +25,17 @@ species-human = Humans
 species-elf = Elves
 species-dwarf = Dwarves
 
+# Other organism display names. One key per species id.
+species-grass = Grass
+species-oak = Oak
+species-seaweed = Seaweed
+species-cave_moss = Cave Moss
+species-deer = Deer
+species-aurochs = Aurochs
+species-sparrow = Sparrow
+species-lion = Lion
+species-dragon = Dragon
+
 # Technology display names. One key per tech id.
 techs-agriculture = Agriculture
 techs-woodworking = Woodworking

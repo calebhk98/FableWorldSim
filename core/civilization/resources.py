@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from core.civilization.content_fields import read_bool, read_float, read_str
+from core.content_fields import read_bool, read_float, read_str
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

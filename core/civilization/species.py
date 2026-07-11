@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from core.civilization.content_fields import (
+from core.content_fields import (
     read_bool,
     read_float,
     read_str,

@@ -1,0 +1,24 @@
+# Cave Moss — a slow subterranean autotroph living off trickled mineral
+# water and faint light; the base of the dwarven food web.  Display name
+# is the Fluent key species-cave_moss in content/locales.
+sapient = false
+domain = "subsurface"
+growth_rate_per_year = 0.15
+commit_fraction = 0.0
+
+medium = "subterranean"
+body_mass_kg = 0.2
+crowding_cap_per_m2 = 0.3
+lifespan_years = 5
+maturity_years = 1
+litter_size = 30
+reproduction = "asexual"
+min_viable_population = 1
+color = "#6E8C5A"
+
+[traits.temperature_k]
+comfort_min = 278
+comfort_max = 295
+tolerance_min = 268
+tolerance_max = 305
+spread = 3.0

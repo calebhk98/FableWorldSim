@@ -1,0 +1,42 @@
+# Oak — a long-lived forest tree that dominates temperate canopy biomass.
+# Display name is the Fluent key species-oak in content/locales.
+sapient = false
+domain = "surface"
+growth_rate_per_year = 0.1
+commit_fraction = 0.0
+
+medium = "terrestrial"
+body_mass_kg = 400
+crowding_cap_per_m2 = 8.0
+lifespan_years = 300
+maturity_years = 25
+litter_size = 40
+reproduction = "asexual"
+min_viable_population = 1
+color = "#4E7B3A"
+
+[traits.temperature_k]
+comfort_min = 280
+comfort_max = 300
+tolerance_min = 263
+tolerance_max = 312
+spread = 5.0
+
+[traits.precipitation_mm_yr]
+comfort_min = 600
+comfort_max = 1800
+tolerance_min = 200
+tolerance_max = 3500
+spread = 150
+
+[traits.altitude_m]
+comfort_min = 0
+comfort_max = 1500
+tolerance_min = -200
+tolerance_max = 3500
+spread = 200
+
+[biome_preference]
+temperate_forest = 1.0
+temperate_rainforest = 0.8
+subtropical_forest = 0.6

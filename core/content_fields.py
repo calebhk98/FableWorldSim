@@ -19,6 +19,15 @@ def read_float(data: Mapping[str, object], key: str, default: float | None = Non
     return float(str(data[key]))
 
 
+def read_int(data: Mapping[str, object], key: str, default: int | None = None) -> int:
+    """Return an integer field, falling back to the default when given."""
+    if key not in data:
+        if default is None:
+            raise KeyError(key)
+        return default
+    return int(str(data[key]))
+
+
 def read_bool(data: Mapping[str, object], key: str, *, default: bool | None = None) -> bool:
     """Return a boolean field, falling back to the default when given."""
     if key not in data:

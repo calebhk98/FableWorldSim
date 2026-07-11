@@ -1,0 +1,48 @@
+# Lion — an apex savanna predator whose boom-bust population swings track
+# its prey.  Display name is the Fluent key species-lion in
+# content/locales.
+sapient = false
+domain = "surface"
+growth_rate_per_year = 0.15
+commit_fraction = 0.0
+
+medium = "terrestrial"
+body_mass_kg = 190
+crowding_cap_per_m2 = 2e-6
+lifespan_years = 15
+maturity_years = 3
+litter_size = 2.5
+reproduction = "sexual"
+min_viable_population = 2
+oscillatory = true
+color = "#C9A24B"
+
+[traits.temperature_k]
+comfort_min = 288
+comfort_max = 308
+tolerance_min = 270
+tolerance_max = 318
+spread = 5.0
+
+[traits.precipitation_mm_yr]
+comfort_min = 200
+comfort_max = 1000
+tolerance_min = 50
+tolerance_max = 2500
+spread = 150
+
+[traits.altitude_m]
+comfort_min = 0
+comfort_max = 2000
+tolerance_min = -200
+tolerance_max = 4000
+spread = 200
+
+[biome_preference]
+savanna = 1.0
+temperate_grassland = 0.6
+tropical_dry_forest = 0.4
+
+[diet]
+deer = 1.0
+aurochs = 0.8
