@@ -16,6 +16,7 @@ population is a count density in individuals/m2).
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -49,6 +50,13 @@ class Organism:
     comfort/tolerance band; ``diet`` maps each eaten species id to a
     preference weight; ``biome_preference`` maps a biome id to a land-cover
     preference (unlisted biomes fall back to a base weight).
+    ``gestation_years`` lengthens the interval between litters (time the
+    mother carries young before they are born, folded into
+    :func:`core.biology.demography.intrinsic_growth_rate`); it defaults to
+    0 (no lengthening).  ``fertility_window_years`` bounds how much of a
+    species' adult life is spent reproductively active before the same
+    formula; it defaults to unbounded (``inf``), so a species whose content
+    omits both fields reproduces exactly as before this pair was added.
     ``seasonal_migration`` opts a species into the bounded multi-hop
     seasonal pull on top of local diffusion (see
     :mod:`core.biology.migration`); it is a flag, not a route — birds
@@ -63,6 +71,8 @@ class Organism:
     lifespan_years: float
     maturity_years: float
     litter_size: float
+    gestation_years: float = 0.0
+    fertility_window_years: float = math.inf
     reproduction: str = SEXUAL
     min_viable_population: int = 2
     oscillatory: bool = False
@@ -86,6 +96,12 @@ class Organism:
             raise ValueError(msg)
         if min(self.lifespan_years, self.maturity_years) <= 0.0:
             msg = f"organism {self.species_id!r} lifespan and maturity must be > 0"
+            raise ValueError(msg)
+        if self.gestation_years < 0.0:
+            msg = f"organism {self.species_id!r} gestation_years must be >= 0"
+            raise ValueError(msg)
+        if self.fertility_window_years <= 0.0:
+            msg = f"organism {self.species_id!r} fertility_window_years must be > 0"
             raise ValueError(msg)
         if self.min_viable_population < 1:
             msg = f"organism {self.species_id!r} min_viable_population must be >= 1"
@@ -142,6 +158,8 @@ def organism_from_content(item: ContentItem) -> Organism:
             lifespan_years=read_float(data, "lifespan_years"),
             maturity_years=read_float(data, "maturity_years"),
             litter_size=read_float(data, "litter_size"),
+            gestation_years=read_float(data, "gestation_years", 0.0),
+            fertility_window_years=read_float(data, "fertility_window_years", math.inf),
             reproduction=read_str(data, "reproduction", SEXUAL),
             min_viable_population=read_int(data, "min_viable_population", 2),
             oscillatory=read_bool(data, "oscillatory", default=False),

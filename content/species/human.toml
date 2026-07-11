@@ -19,6 +19,8 @@ crowding_cap_per_m2 = 1e-4
 lifespan_years = 70
 maturity_years = 15
 litter_size = 1.1
+gestation_years = 0.75
+fertility_window_years = 30
 
 # Per-tech research propensity weights (unlisted techs default to 1.0).
 [propensity]

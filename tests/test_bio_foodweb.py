@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from core.biology.foodweb import FeedingParams, apply_offtake, feed_location, food_web_graph
+from core.biology.foodweb import (
+    FeedingParams,
+    apply_offtake,
+    feed_location,
+    food_web_graph,
+    reachable_food_biomass,
+)
 from tests.bio_helpers import make_organism
 
 
@@ -41,6 +47,23 @@ def test_clear_cutting_starves_the_dependent_herbivore() -> None:
     lush = feed_location({"grass": 5.0, "herbivore": 0.01}, orgs, FeedingParams())  # type: ignore[arg-type]
     cleared = feed_location({"grass": 0.05, "herbivore": 0.01}, orgs, FeedingParams())  # type: ignore[arg-type]
     assert cleared.fed_fraction["herbivore"] < lush.fed_fraction["herbivore"]
+
+
+def test_reachable_food_biomass_is_diet_weighted_and_present_only() -> None:
+    grass = make_organism("grass")
+    herbivore = make_organism("herbivore", diet={"grass": 0.5})
+    reachable = reachable_food_biomass(
+        herbivore,
+        {"grass": {"a": 4.0, "b": 0.0}},
+        _orgs(grass, herbivore),  # type: ignore[arg-type]
+    )
+    # "b" has zero grass standing, so it contributes nothing.
+    assert reachable == {"a": 2.0}
+
+
+def test_reachable_food_biomass_is_empty_for_an_autotroph() -> None:
+    grass = make_organism("grass")
+    assert reachable_food_biomass(grass, {}, _orgs(grass)) == {}  # type: ignore[arg-type]
 
 
 def test_food_web_graph_carries_trophic_nodes_and_diet_edges() -> None:

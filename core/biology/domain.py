@@ -16,7 +16,12 @@ from typing import TYPE_CHECKING
 
 from core.biology.disease import apply_disease
 from core.biology.extinction import enforce_viability
-from core.biology.foodweb import FeedingParams, apply_offtake, feed_location
+from core.biology.foodweb import (
+    FeedingParams,
+    apply_offtake,
+    feed_location,
+    reachable_food_biomass,
+)
 from core.biology.migration import (
     DiffusionParams,
     Geometry,
@@ -24,7 +29,7 @@ from core.biology.migration import (
     diffuse,
     seasonal_pull,
 )
-from core.biology.population import GrowthParams, env_capacity, grow
+from core.biology.population import FoodCapacityParams, GrowthParams, env_capacity, grow
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -63,7 +68,9 @@ class DomainRunner:
         result: _Fields = {}
         disease_hits: dict[str, int] = {}
         for sid in species_ids:
-            grown = self._grow(sid, offtaken[sid], suitability.get(sid, {}), fed.get(sid, {}))
+            grown = self._grow(
+                sid, offtaken[sid], suitability.get(sid, {}), fed.get(sid, {}), offtaken
+            )
             diseased, cells = self._disease(sid, grown)
             if cells:
                 disease_hits[sid] = len(cells)
@@ -77,19 +84,50 @@ class DomainRunner:
         pops: Mapping[str, _Field],
         previous: Mapping[str, Mapping[str, float]],
     ) -> _Fields:
-        """Cull dust, apply viability gates, and log any fresh extinction."""
+        """Cull dust, apply viability gates, and log extinction (global or local)."""
         result: _Fields = {}
         for sid in species_ids:
             culled, alive = enforce_viability(
                 pops[sid], self.organisms[sid], self.area_of, self.params.extinction_epsilon_per_m2
             )
             result[sid] = culled
-            was_alive = any(value > 0.0 for value in previous.get(sid, {}).values())
-            if was_alive and not alive and self.chronicle is not None:
+            if self.chronicle is None:
+                continue
+            prior_field = previous.get(sid, {})
+            was_alive = any(value > 0.0 for value in prior_field.values())
+            if was_alive and not alive:
                 self.chronicle.append(
                     tick=self.tick, kind="extinction", subject=sid, payload={"domain": self.domain}
                 )
+            elif alive:
+                self._log_local_extinctions(sid, culled, prior_field)
         return result
+
+    def _log_local_extinctions(
+        self,
+        species_id: str,
+        current: Mapping[str, float],
+        prior_field: Mapping[str, float],
+    ) -> None:
+        """Append a local-extinction event per cell a surviving species vanished from.
+
+        Distinct from the domain-wide ``extinction`` event: this only fires
+        when the species is still alive elsewhere this tick, so a genuine
+        global extinction is reported exactly once (by :meth:`finalize`)
+        rather than echoed as a flood of per-cell events for the same
+        underlying loss.  Cheap and append-only: one comparison per
+        previously-occupied location, one event per zero-crossing.
+        """
+        if self.chronicle is None:
+            return
+        for loc, prior_value in prior_field.items():
+            if prior_value > 0.0 and current.get(loc, 0.0) <= 0.0:
+                self.chronicle.append(
+                    tick=self.tick,
+                    kind="local_extinction",
+                    subject=species_id,
+                    payload={"domain": self.domain, "cell": loc},
+                )
 
     def _feed(
         self,
@@ -124,10 +162,22 @@ class DomainRunner:
         field: Mapping[str, float],
         suitability: Mapping[str, float],
         fed_fraction: Mapping[str, float],
+        post_offtake_pops: Mapping[str, Mapping[str, float]],
     ) -> _Field:
-        """Grow one species' field toward its suitability-scaled capacity."""
+        """Grow one species' field toward its food- and suitability-limited capacity.
+
+        ``post_offtake_pops`` is every species' field *after* this tick's
+        feeding pass — the current standing food stock a consumer's
+        food-limited capacity term is drawn from (see
+        :func:`core.biology.foodweb.reachable_food_biomass`).
+        """
         organism = self.organisms[species_id]
-        capacity = env_capacity(organism, suitability)
+        food_biomass = reachable_food_biomass(organism, post_offtake_pops, self.organisms)
+        food_params = FoodCapacityParams(
+            intake_kg_per_kg_body_year=self.params.intake_kg_per_kg_body_year,
+            max_offtake_fraction=self.params.max_offtake_fraction,
+        )
+        capacity = env_capacity(organism, suitability, food_biomass, food_params)
         params = GrowthParams(
             dt_years=self.dt_years,
             no_habitat_decay_per_year=self.params.no_habitat_decay_per_year,
