@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
     from core.biology.organism import Organism
     from core.climate.model import ClimateState, SeasonClimate
+    from core.hydrology.lakes import LakeNetwork
     from core.hydrology.sea_mask import SeaMask
     from ports.grid import CellId, Grid
     from ports.subsurface import NodeId, SubsurfaceGrid
@@ -70,6 +71,9 @@ class LayersBelow:
     sea_mask: SeaMask
     heights_m: Mapping[CellId, float]
     biome_field: Mapping[CellId, str]
+    lakes: LakeNetwork | None = None
+    """Solved lake network, when hydrology built one (``None`` skips the
+    lake branch of the medium gate, same as omitting it entirely)."""
 
 
 @dataclass(frozen=True)
@@ -83,6 +87,10 @@ class BiologyContext:
     biome_field: Mapping[CellId, str]
     dryness_by_cell: Mapping[CellId, float]
     land_cells: tuple[CellId, ...]
+    lake_mask: Mapping[CellId, bool] = field(default_factory=dict)
+    """Per-cell ``is_lake`` field threaded into the medium gate alongside
+    ``sea_mask``, so aquatic/amphibious species can occupy inland lakes
+    (see ``core.biology.suitability.SurfaceEnvironment``)."""
     subsurface: SubsurfaceGrid | None = None
     subsurface_temperature: Mapping[NodeId, float] = field(default_factory=dict)
     subsurface_diggability: Mapping[NodeId, float] = field(default_factory=dict)
@@ -166,6 +174,7 @@ def build_biology_context(
         TEMPERATURE_RANGE_AXIS: temperature_range,
     }
     land_cells = tuple(cell for cell in below.grid.cells() if below.sea_mask.is_land(cell))
+    lake_mask = dict(below.lakes.is_lake) if below.lakes is not None else {}
     sub_temp: dict[NodeId, float] = {}
     sub_dig: dict[NodeId, float] = {}
     if subsurface is not None:
@@ -179,6 +188,7 @@ def build_biology_context(
         biome_field=below.biome_field,
         dryness_by_cell=_dryness_field(climate.annual_precipitation_mm_yr, params.wet_precip_mm),
         land_cells=land_cells,
+        lake_mask=lake_mask,
         subsurface=subsurface,
         subsurface_temperature=sub_temp,
         subsurface_diggability=sub_dig,

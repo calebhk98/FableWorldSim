@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from adapters.rng_seeded import SeededRng
 from core.biology.context import BiologyParams
-from core.biology.engine import BiologyProcess, step_biology
+from core.biology.engine import BiologyProcess, _surface_suitability, step_biology
 from core.biology.state import WorldBiologyState, plant_biomass_field
 from core.biology.wildfire import FireParams
 from core.chronicle.log import Chronicle
@@ -28,6 +28,20 @@ def _grass_and_herbivore() -> tuple[object, object]:
 
 def _total(field: dict[str, float]) -> float:
     return sum(field.values())
+
+
+def test_engine_suitability_pass_honors_the_context_lake_mask() -> None:
+    """The suitability pass must thread ``ctx.lake_mask`` through to the
+    medium gate, not just ``ctx.sea_mask`` -- otherwise a hydrology-built
+    lake network never actually reaches a running biology step."""
+    grid = FakeGrid(rows=2, cols=2)
+    fish = make_organism("fish", medium="aquatic")
+    ctx = uniform_context(grid, [fish])
+    ctx = replace(ctx, lake_mask={"r0c0": True})
+
+    fields = _surface_suitability(ctx, ["fish"])
+
+    assert fields["fish"] == {"r0c0": 1.0}
 
 
 def test_process_runs_under_the_orchestrator_and_advances_the_tick() -> None:

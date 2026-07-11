@@ -39,3 +39,23 @@ def test_surface_suitability_gates_by_medium() -> None:
     env = SurfaceEnvironment(axis_fields={}, biome_field={}, sea_mask=mask)
     # All land, so an aquatic species is suitable nowhere.
     assert surface_suitability(fish, list(grid.cells()), env) == {}
+
+
+def test_surface_suitability_admits_aquatic_species_into_a_lake_cell() -> None:
+    """A lake cell is still "land" by ``SeaMask`` (it sits above sea level),
+    so an aquatic species needs the ``lake_mask`` branch of the medium gate
+    to be suitable there -- otherwise (issue #12's "done when") it can
+    never occupy a lake even though the water is right there."""
+    grid = FakeGrid(rows=2, cols=2)
+    mask = all_land_mask(grid)
+    fish = make_organism("fish", medium="aquatic")
+    lake_mask = {"r0c0": True}
+
+    without_lake = SurfaceEnvironment(axis_fields={}, biome_field={}, sea_mask=mask)
+    assert surface_suitability(fish, list(grid.cells()), without_lake) == {}
+
+    with_lake = SurfaceEnvironment(
+        axis_fields={}, biome_field={}, sea_mask=mask, lake_mask=lake_mask
+    )
+    result = surface_suitability(fish, list(grid.cells()), with_lake)
+    assert result == {"r0c0": 1.0}
