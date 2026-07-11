@@ -32,7 +32,16 @@ from core.climate.model import simulate_climate
 from core.hydrology.rivers import build_river_network
 from core.hydrology.sea_mask import build_sea_mask
 from core.sim.orchestrator import Orchestrator
-from core.sim.presets import earth
+from core.sim.planet_config import PlanetConfig
+from core.sim.presets import (
+    earth,
+    fantasy_default,
+    high_tilt,
+    luna,
+    mars,
+    tidally_locked_ocean,
+    venus,
+)
 from core.sim.world_sweep import SweepReport, habitability_score, run_sweep
 from core.topography.procedural import ProceduralTopography
 
@@ -72,10 +81,54 @@ def _content() -> tuple[tuple[Organism, ...], tuple[BiomeDefinition, ...]]:
     return load_organisms(registry), load_biomes(registry)
 
 
-def build_world(seed: int, *, resolution: int, season_count: int) -> FastWorld:
-    """Generate one world from a seed at the given grid + seasonal fidelity."""
+def get_all_presets() -> dict[str, tuple[PlanetConfig, str]]:
+    """Return all available scenario presets as name -> (config, description)."""
+    return {
+        "earth": (
+            earth(),
+            "Earth baseline: 1 AU from the Sun, day-night cycle, one moon.",
+        ),
+        "mars": (
+            mars(),
+            "Mars: thin CO2 atmosphere, bone-dry, two tiny moons.",
+        ),
+        "venus": (
+            venus(),
+            "Venus: retrograde spin, crushing greenhouse effect.",
+        ),
+        "luna": (
+            luna(),
+            "The Moon: airless, tidally locked, no day-night cycle.",
+        ),
+        "tidally_locked_ocean": (
+            tidally_locked_ocean(),
+            "Eyeball planet: tidally locked ocean world around a dim star.",
+        ),
+        "high_tilt": (
+            high_tilt(),
+            "Seasonal extremes: Uranus-grade axial tilt.",
+        ),
+        "fantasy_default": (
+            fantasy_default(),
+            "Fantasia: gentle Earth-plus for storytelling.",
+        ),
+    }
+
+
+def build_world(
+    seed: int,
+    *,
+    resolution: int,
+    season_count: int,
+    planet: PlanetConfig | None = None,
+) -> FastWorld:
+    """Generate one world from a seed at the given grid + seasonal fidelity.
+
+    If planet is None, defaults to Earth.
+    """
     _organisms, biomes = _content()
-    planet = earth()
+    if planet is None:
+        planet = earth()
     grid = create_grid("h3", resolution=resolution, radius_m=planet.radius_m)
     heights = dict(ProceduralTopography(SeededRng(seed)).heights(grid))
     sea_mask = build_sea_mask(grid, heights, planet.ocean_fraction, planet.tidal_range_m)
@@ -87,10 +140,10 @@ def build_world(seed: int, *, resolution: int, season_count: int) -> FastWorld:
 
 
 def evaluate_seed(
-    seed: int, *, resolution: int = _DEFAULT_RESOLUTION
+    seed: int, *, resolution: int = _DEFAULT_RESOLUTION, planet: PlanetConfig | None = None
 ) -> tuple[float, dict[str, float]]:
     """Fast-score a seed by habitability (the cheap preview)."""
-    world = build_world(seed, resolution=resolution, season_count=_FAST_SEASONS)
+    world = build_world(seed, resolution=resolution, season_count=_FAST_SEASONS, planet=planet)
     return habitability_score(
         world.grid, world.biome_field, world.climate.annual_mean_temperature_k, world.sea_mask
     )
@@ -107,6 +160,7 @@ def deepen_seed(
     *,
     resolution: int = _DEFAULT_RESOLUTION,
     ticks: int = _DEFAULT_DEEP_TICKS,
+    planet: PlanetConfig | None = None,
 ) -> dict[str, object]:
     """Run the expensive simulation on one winner and summarize it.
 
@@ -114,7 +168,7 @@ def deepen_seed(
     and steps a seeded biology run under the orchestrator — capturing its
     wall-clock telemetry. Returns a JSON-able summary.
     """
-    world = build_world(seed, resolution=resolution, season_count=_DEEP_SEASONS)
+    world = build_world(seed, resolution=resolution, season_count=_DEEP_SEASONS, planet=planet)
     rivers = build_river_network(
         world.grid,
         world.heights_m,
@@ -160,16 +214,17 @@ def run_world_sweep(
     keep_top_k: int = 2,
     resolution: int = _DEFAULT_RESOLUTION,
     deep_ticks: int = _DEFAULT_DEEP_TICKS,
+    planet: PlanetConfig | None = None,
 ) -> SweepReport:
     """Sweep ``count`` seeds, keep the best ``keep_top_k``, and deep-sim them."""
 
     def evaluate(seed: int) -> tuple[float, dict[str, float]]:
         """Fast-score one seed at the sweep's resolution."""
-        return evaluate_seed(seed, resolution=resolution)
+        return evaluate_seed(seed, resolution=resolution, planet=planet)
 
     def deepen(seed: int) -> dict[str, object]:
         """Deep-sim one winning seed at the sweep's fidelity."""
-        return deepen_seed(seed, resolution=resolution, ticks=deep_ticks)
+        return deepen_seed(seed, resolution=resolution, ticks=deep_ticks, planet=planet)
 
     return run_sweep(_seeds(base_seed, count), evaluate, keep_top_k, deepen=deepen)
 
