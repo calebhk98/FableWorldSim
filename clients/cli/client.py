@@ -129,6 +129,55 @@ class APIClient:
         return response.json()["value"]
 
     # -----------------------------------------------------------------------
+    # World lifecycle: create/get/step the one live, steppable world
+    # -----------------------------------------------------------------------
+
+    def create_world(  # noqa: PLR0913 - one keyword param per create_world knob
+        self,
+        seed: int,
+        *,
+        preset_name: str | None = "earth",
+        planet_config: dict[str, Any] | None = None,
+        resolution: int = 0,
+        season_count: int = 2,
+        grid_backend: str = "h3",
+    ) -> dict[str, Any]:
+        """Build a world from a seed/preset and store it as the live world.
+
+        Returns the ``create_world`` command's summary result (tick=0,
+        cell count, planet name, ...).
+        """
+        params = {
+            "seed": seed,
+            "preset_name": preset_name,
+            "planet_config": planet_config,
+            "resolution": resolution,
+            "season_count": season_count,
+            "grid_backend": grid_backend,
+        }
+        return self.execute_command("create_world", params)
+
+    def get_world(self) -> dict[str, Any]:
+        """Fetch a summary of the current live world (or ``exists: false``)."""
+        return self.execute_command("get_world")
+
+    def step_world(self, ticks: int = 1) -> dict[str, Any]:
+        """Advance the live world by ``ticks`` orchestrator ticks."""
+        return self.execute_command("step_world", {"ticks": ticks})
+
+    def query_field(self, field: str) -> dict[str, Any]:
+        """Fetch ``cell_id -> value`` for one per-cell field of the live world."""
+        return self.execute_command("query_field", {"field": field})
+
+    def grid_geometry(self) -> dict[str, Any]:
+        """Fetch ``cell_id -> {lat, lng}`` centroid for the live world's grid."""
+        return self.execute_command("grid_geometry")
+
+    def export_recipe(self) -> dict[str, Any]:
+        """Fetch the reproducibility recipe for the live world."""
+        return self.execute_command("export_recipe")
+
+    # -----------------------------------------------------------------------
     # Metrics
     # -----------------------------------------------------------------------
 

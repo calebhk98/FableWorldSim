@@ -72,8 +72,13 @@ _DEEP_SEASONS = 4
 _CHANNEL_THRESHOLD_CELL_MULTIPLE = 4.0
 _DEFAULT_RESOLUTION = 1
 _DEFAULT_DEEP_TICKS = 5
-_PEAK_BIOMASS_CAPACITY_KG_M2 = 5.0
-"""Peak standing biomass (fully vegetated biome) civ capital-siting scores by."""
+PEAK_BIOMASS_CAPACITY_KG_M2 = 5.0
+"""Peak standing biomass (fully vegetated biome) civ capital-siting scores by.
+
+Public (not module-private) because :mod:`api.world_state` needs the same
+constant to build a civilization context for the persisted, steppable
+world -- one number both call sites agree on.
+"""
 
 
 @dataclass(frozen=True)
@@ -88,8 +93,13 @@ class FastWorld:
 
 
 @functools.lru_cache(maxsize=1)
-def _content() -> tuple[tuple[Organism, ...], tuple[BiomeDefinition, ...]]:
-    """Load and cache the base content's organisms and biomes."""
+def base_content() -> tuple[tuple[Organism, ...], tuple[BiomeDefinition, ...]]:
+    """Load and cache the base content's organisms and biomes.
+
+    Public: shared by this module's own deep-sim/sweep path and by
+    :mod:`api.world_state`'s persisted-world builder, so both load the
+    same cached registry instead of duplicating the TOML read.
+    """
     registry = TomlContentRegistry([("base", _REPO_CONTENT)])
     return load_organisms(registry), load_biomes(registry)
 
@@ -129,19 +139,47 @@ def get_all_presets() -> dict[str, tuple[PlanetConfig, str]]:
 
 
 @functools.lru_cache(maxsize=1)
-def _civ_content() -> tuple[
+def civ_content() -> tuple[
     tuple[SpeciesDefinition, ...], tuple[ResourceDefinition, ...], tuple[TechDefinition, ...]
 ]:
     """Load and cache the civilization layer's species, resources, and techs.
 
     Species content lives in the same ``content/species`` directory
-    ``_content`` reads for biology organisms (each file doubles as an
+    ``base_content`` reads for biology organisms (each file doubles as an
     ``Organism`` and, for the sapient ones, a ``SpeciesDefinition``), so
     both loaders point at the same registry and the same species ids line
-    up across layers for free.
+    up across layers for free. Public for the same reason as
+    ``base_content``: :mod:`api.world_state` builds a civ context too.
     """
     registry = TomlContentRegistry([("base", _REPO_CONTENT)])
     return load_species(registry), load_resources(registry), load_techs(registry)
+
+
+def resolve_planet(
+    preset_name: str | None, planet_config: Mapping[str, object] | None
+) -> PlanetConfig | None:
+    """Resolve a :class:`PlanetConfig` from a custom dict or a named preset.
+
+    ``planet_config`` wins when both are given (mirrors ``build_world``'s
+    own precedence). Returns ``None`` when neither is given, meaning
+    "use the caller's own default" (``build_world`` defaults to Earth).
+    Raises ``ValueError`` for a malformed ``planet_config`` and
+    ``KeyError`` for an unknown ``preset_name`` -- both already handled as
+    422/404 by the command dispatcher (see ``api.app._execute_command``).
+    """
+    if planet_config is not None:
+        try:
+            return PlanetConfig.from_dict(planet_config)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid planet_config: {exc}") from exc
+    if preset_name:
+        presets = get_all_presets()
+        if preset_name not in presets:
+            known = ", ".join(presets.keys())
+            raise KeyError(f"unknown preset {preset_name!r}; known: {known}")
+        planet, _description = presets[preset_name]
+        return planet
+    return None
 
 
 def build_world(
@@ -157,7 +195,7 @@ def build_world(
     If planet is None, defaults to Earth.
     The grid_backend defaults to "h3" for backward compatibility.
     """
-    _organisms, biomes = _content()
+    _organisms, biomes = base_content()
     if planet is None:
         planet = earth()
     grid = create_grid(grid_backend, resolution=resolution, radius_m=planet.radius_m)
@@ -246,8 +284,8 @@ def deepen_seed(
         lake_cells,
         precipitation_mm_yr=world.climate.annual_precipitation_mm_yr,
     )
-    organisms, biomes = _content()
-    species, resources, techs = _civ_content()
+    organisms, biomes = base_content()
+    species, resources, techs = civ_content()
     below = LayersBelow(
         world.grid, world.climate, world.sea_mask, world.heights_m, world.biome_field, lakes
     )
@@ -260,7 +298,7 @@ def deepen_seed(
         techs=techs,
         resources=resources,
         biomass_capacity_kg_m2=biomass_capacity_from_biomes(
-            world.biome_field, biomes, _PEAK_BIOMASS_CAPACITY_KG_M2
+            world.biome_field, biomes, PEAK_BIOMASS_CAPACITY_KG_M2
         ),
     )
     rng = SeededRng(seed)

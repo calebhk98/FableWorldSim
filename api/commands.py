@@ -24,6 +24,7 @@ from api.scenario_commands import (
 )
 from api.settings import get_setting, setting_paths, with_setting
 from api.state import AppState
+from api.world_commands import register_world_commands
 from api.world_service import report_to_dict, run_world_sweep
 from api.ws_events import SettingChangedEvent
 from core.sim.world_sweep import SweepReport
@@ -341,4 +342,5 @@ def build_default_registry() -> CommandRegistry:
             mutates=True,
         )
     )
+    register_world_commands(registry, Command)
     return registry

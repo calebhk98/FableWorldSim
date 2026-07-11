@@ -13,8 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from api.world_service import build_world, get_all_presets
-from core.sim.planet_config import PlanetConfig
+from api.world_service import build_world, get_all_presets, resolve_planet
 from ports.grid import GridBackendUnavailableError
 
 if TYPE_CHECKING:
@@ -74,18 +73,7 @@ def build_world_command(state: AppState, params: BaseModel) -> object:
         msg = "build_world invoked with the wrong params model"
         raise TypeError(msg)
 
-    planet = None
-    if params.planet_config is not None:
-        try:
-            planet = PlanetConfig.from_dict(params.planet_config)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"invalid planet_config: {exc}") from exc
-    elif params.preset_name:
-        presets = get_all_presets()
-        if params.preset_name not in presets:
-            known = ", ".join(presets.keys())
-            raise KeyError(f"unknown preset {params.preset_name!r}; known: {known}")
-        planet, _description = presets[params.preset_name]
+    planet = resolve_planet(params.preset_name, params.planet_config)
 
     try:
         world = build_world(

@@ -20,17 +20,8 @@ import sys
 from typing import Any
 
 from clients.cli.client import APIClient
-
-
-def print_json(data: Any, indent: int = 2) -> None:
-    """Pretty-print a JSON-serializable object."""
-    print(json.dumps(data, indent=indent, default=str))
-
-
-def fatal(msg: str) -> None:
-    """Print an error and exit."""
-    print(f"ERROR: {msg}", file=sys.stderr)
-    sys.exit(1)
+from clients.cli.output import fatal, print_json
+from clients.cli.world_cli import add_world_subparser, dispatch_world
 
 
 class CLI:
@@ -270,6 +261,9 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901, PLR0912, PLR0915 
     )
     sweep.add_argument("--deep-ticks", type=int, default=5, help="Biology ticks for deep-sim")
 
+    # The live, steppable world: create/get/step/query-field/geometry/export
+    add_world_subparser(subparsers)
+
     # Configuration
     config = subparsers.add_parser("config", help="Get/set configuration")
     config_subs = config.add_subparsers(dest="config_cmd")
@@ -303,6 +297,11 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901, PLR0912, PLR0915 
             cli.ping(args)
         elif args.command == "world-sweep":
             cli.world_sweep(args)
+        elif args.command == "world":
+            if getattr(args, "world_cmd", None) is None:
+                parser.print_help()
+                return 1
+            return dispatch_world(cli, args)
         elif args.command == "config":
             if args.config_cmd == "get":
                 cli.config_get(args)
