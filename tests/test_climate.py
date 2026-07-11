@@ -7,6 +7,7 @@ qualitative structure the design doc names for each regime.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 
 import pytest
@@ -15,7 +16,9 @@ pytest.importorskip("h3")
 
 from adapters.grid_registry import create_grid
 from adapters.rng_seeded import SeededRng
+from core.climate.insolation import insolation_field
 from core.climate.model import ClimateState, simulate_climate
+from core.climate.temperature import solve_temperature_with_ice
 from core.climate.wind import zonal_band_wind
 from core.hydrology.sea_mask import SeaMask, build_sea_mask
 from core.sim.planet_config import PlanetConfig
@@ -181,3 +184,63 @@ def test_orographic_shadow_on_real_grid() -> None:
     windward = band_mean(-14.0, 0.0)
     lee = band_mean(12.0, 26.0)
     assert windward > lee * 1.5
+
+
+def test_earth_has_the_three_zonal_wind_bands() -> None:
+    """Tropics, mid-latitudes, and poles must each drive a different band."""
+    planet = earth()
+    tropical_east = zonal_band_wind(15.0, planet)[0]
+    mid_east = zonal_band_wind(45.0, planet)[0]
+    polar_east = zonal_band_wind(75.0, planet)[0]
+    assert tropical_east < 0.0, "expected Hadley-cell trade easterlies"
+    assert mid_east > 0.0, "expected Ferrel-cell westerlies"
+    assert polar_east < 0.0, "expected polar easterlies"
+
+
+@pytest.mark.slow
+def test_atmosphere_thickness_alone_sets_the_day_night_swing() -> None:
+    """Same world, same everything, only surface pressure differs."""
+    grid = create_grid("h3", resolution=0)
+    heights = ProceduralTopography(SeededRng(_SEED)).heights(grid)
+    base = earth()
+
+    def with_pressure(factor: float, name: str) -> PlanetConfig:
+        atmosphere = dataclasses.replace(
+            base.atmosphere, surface_pressure_pa=base.atmosphere.surface_pressure_pa * factor
+        )
+        return dataclasses.replace(base, name=name, atmosphere=atmosphere)
+
+    thin = with_pressure(0.1, "thin-air Earth")
+    thick = with_pressure(5.0, "thick-air Earth")
+
+    def spread(planet: PlanetConfig) -> float:
+        mask = build_sea_mask(grid, heights, planet.ocean_fraction)
+        state = simulate_climate(grid, planet, heights, mask, season_count=2)
+        temps = state.annual_mean_temperature_k.values()
+        return max(temps) - min(temps)
+
+    assert spread(thin) > spread(thick)
+
+
+@pytest.mark.slow
+def test_ice_albedo_feedback_amplifies_cooling() -> None:
+    """Cooling the same insolation field grows ice AND drops mean temperature together."""
+    planet = earth()
+    grid = create_grid("h3", resolution=0)
+    heights = ProceduralTopography(SeededRng(_SEED)).heights(grid)
+    mask = build_sea_mask(grid, heights, planet.ocean_fraction)
+    base_insolation = insolation_field(grid, planet, orbit_phase=0.25)
+    warm_insolation = {cell: value * 1.15 for cell, value in base_insolation.items()}
+    cold_insolation = {cell: value * 0.85 for cell, value in base_insolation.items()}
+
+    warm_temps, warm_ice = solve_temperature_with_ice(grid, planet, warm_insolation, mask)
+    cold_temps, cold_ice = solve_temperature_with_ice(grid, planet, cold_insolation, mask)
+
+    def ice_fraction(ice: dict[CellId, bool]) -> float:
+        return sum(1 for frozen in ice.values() if frozen) / len(ice)
+
+    def mean_temp(temps: dict[CellId, float]) -> float:
+        return sum(temps.values()) / len(temps)
+
+    assert ice_fraction(cold_ice) > ice_fraction(warm_ice)
+    assert mean_temp(cold_temps) < mean_temp(warm_temps)

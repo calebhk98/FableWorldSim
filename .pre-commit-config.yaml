@@ -64,3 +64,12 @@ repos:
         language: system
         always_run: true
         pass_filenames: false
+
+      # Fast test subset on every commit: everything except the `slow` marker
+      # (full-sim / cross-backend / end-to-end). CI runs the whole suite.
+      - id: pytest-fast
+        name: fast test subset (excludes slow / full-sim tests)
+        entry: python -m pytest -m "not slow" -q
+        language: system
+        always_run: true
+        pass_filenames: false

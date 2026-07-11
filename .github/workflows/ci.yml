@@ -48,6 +48,22 @@ jobs:
         run: |
           uv run python tools/hooks/check_file_length.py $(git ls-files '*.py')
           uv run python tools/hooks/check_port_boundary.py $(git ls-files '*.py')
+          uv run python tools/hooks/check_single_source.py
 
+      # Duplicate-code detection needs node/npx (jscpd is an npm tool). Run it
+      # on Linux only — one OS is enough for a source-level check, and it keeps
+      # the Windows job free of a node toolchain it doesn't otherwise need.
+      - name: Set up Node (for jscpd)
+        if: runner.os == 'Linux'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Duplicate-code detection (jscpd)
+        if: runner.os == 'Linux'
+        run: npx --yes jscpd@4 --threshold 0 --min-tokens 50 --exitCode 1 core ports adapters api
+
+      # The full suite, including the `slow` full-sim / cross-backend tests that
+      # the local pre-commit fast subset skips.
       - name: Tests
         run: uv run pytest
