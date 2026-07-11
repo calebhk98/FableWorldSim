@@ -24,9 +24,22 @@ bands):
     global area-weighted mean temperature: 282.62 K   (real Earth ~288 K)
     permanent-ice area fraction, polar zone: 0.988
     permanent-ice area fraction, whole planet: 0.146
+
+The final test in this module (``test_earth_koppen_matches_reference_climatology``)
+is the map-diff item from the calibration checklist: it classifies every
+cell of the same Earth preset with the Köppen classifier
+(``core/climate/koppen.py``) and diffs the per-cell *group* against
+``tests/data/koppen_reference.json``, a coarse hand-encoded stand-in for
+real Köppen-Geiger climatology (see that file's own header for what it is
+and, importantly, what it is *not*). See that test's docstring for why the
+diff is band/land-ocean based rather than exact-longitude, and for the
+observed agreement fraction the chosen threshold is calibrated against.
 """
 
 from __future__ import annotations
+
+import json
+from pathlib import Path
 
 import pytest
 
@@ -34,6 +47,7 @@ pytest.importorskip("h3")
 
 from adapters.grid_registry import create_grid
 from adapters.rng_seeded import SeededRng
+from core.climate.koppen import koppen_field_by_group
 from core.climate.model import ClimateState, simulate_climate
 from core.grid.area_weighted import area_fraction, area_weighted_mean
 from core.hydrology.sea_mask import SeaMask, build_sea_mask
@@ -67,6 +81,18 @@ _MIN_TROPICAL_TO_POLAR_PRECIP_RATIO = 2.0
 _MIN_POLAR_ICE_FRACTION = 0.3
 _MIN_GLOBAL_ICE_FRACTION = 0.02
 _MAX_GLOBAL_ICE_FRACTION = 0.6
+
+_KOPPEN_REFERENCE_PATH = Path(__file__).parent / "data" / "koppen_reference.json"
+
+# Observed cell-count group match against tests/data/koppen_reference.json for
+# the same seed-42/res-1 Earth preset run (842 cells): 388/842 = 46.1%. For
+# context, always guessing the single most common group the model actually
+# produced (D, 265/842 cells) would score 31.5% -- a "no-skill" ceiling this
+# reference-informed comparison must clear. The floor below sits comfortably
+# above that no-skill baseline and a few points under the observed value, so
+# the test asserts "the classifier's latitude/land-ocean structure is doing
+# real work", not "this exact seed reproduces 46.1% forever".
+_MIN_REFERENCE_GROUP_AGREEMENT = 0.40
 
 
 def _zone(abs_lat_deg: float) -> str:
@@ -181,4 +207,70 @@ def test_polar_ice_cap_without_a_global_snowball(earth_climate: _EarthBundle) ->
     assert polar_ice_fraction > _MIN_POLAR_ICE_FRACTION, polar_ice_fraction
     assert _MIN_GLOBAL_ICE_FRACTION < global_ice_fraction < _MAX_GLOBAL_ICE_FRACTION, (
         global_ice_fraction
+    )
+
+
+def _load_koppen_reference_bands() -> list[dict[str, float | str]]:
+    """Load the coarse reference bands from ``tests/data/koppen_reference.json``."""
+    with _KOPPEN_REFERENCE_PATH.open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+    bands: list[dict[str, float | str]] = payload["bands"]
+    return bands
+
+
+def _reference_group(bands: list[dict[str, float | str]], abs_lat_deg: float, is_land: bool) -> str:
+    """Return the reference's dominant Köppen group for one (lat, land/ocean) cell."""
+    key = "land_group" if is_land else "ocean_group"
+    for band in bands:
+        if band["lat_min_deg"] <= abs_lat_deg < band["lat_max_deg"]:
+            return str(band[key])
+    msg = f"no reference band covers |lat|={abs_lat_deg}"
+    raise ValueError(msg)
+
+
+@pytest.mark.slow
+def test_earth_koppen_matches_reference_climatology(earth_climate: _EarthBundle) -> None:
+    """Diff the Earth preset's Köppen map against coarse reference climatology.
+
+    This is the calibration-checklist item: classify every cell with the
+    real Köppen classifier and compare its *group* letter against
+    ``tests/data/koppen_reference.json`` -- a coarse, hand-encoded stand-in
+    for real Köppen-Geiger climatology (see that file's own disclaimer).
+
+    The comparison is by (latitude band, land-vs-ocean), not exact
+    longitude: the Earth preset's continents are procedurally generated
+    (``core/topography/procedural.py``, seeded noise) and bear no
+    resemblance to real coastlines, so indexing the reference by this
+    world's actual longitude would mostly score where the procedural
+    generator happened to place land relative to a real desert or
+    rainforest -- geography-placement luck, not climate physics. Latitude
+    band and this world's own land/ocean mask are properties the diff can
+    legitimately compare.
+
+    This is *not* a claim of GCM- or reanalysis-grade accuracy: the
+    simplified energy-balance model has known biases relevant here (a
+    ~5 K global cold bias vs. real Earth -- see the module docstring's
+    observed reference run -- and a tendency for procedurally-generated
+    high terrain to push land cells at many latitudes into the cold D
+    class via lapse-rate cooling, an effect real alpine climates share but
+    this coarse reference does not encode). The threshold
+    (``_MIN_REFERENCE_GROUP_AGREEMENT``, see its definition for the
+    observed value and the no-skill baseline it must clear) is chosen to
+    demand real structural agreement without pretending this coarse setup
+    can reproduce a 1-km satellite-era climate raster.
+    """
+    grid, mask, state = earth_climate
+    bands = _load_koppen_reference_bands()
+    koppen_by_group = koppen_field_by_group(state)
+
+    matches = sum(
+        1
+        for cell, group in koppen_by_group.items()
+        if group == _reference_group(bands, abs(grid.centroid(cell).lat_deg), mask.is_land(cell))
+    )
+    agreement = matches / len(koppen_by_group)
+
+    assert agreement > _MIN_REFERENCE_GROUP_AGREEMENT, (
+        f"group agreement {agreement:.2%} against coarse reference climatology, "
+        f"expected > {_MIN_REFERENCE_GROUP_AGREEMENT:.0%}"
     )
