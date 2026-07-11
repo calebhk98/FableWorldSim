@@ -66,21 +66,37 @@ class JaxBackend(ArrayBackend):
         Builds a 1-D device mesh over ``jax.devices()`` and places the
         array with a :class:`~jax.sharding.NamedSharding` that splits the
         chosen axis.  Downstream ``jax.numpy`` ops on the result stay
-        distributed automatically.  When there is a single device, or the
-        axis length does not divide evenly across the mesh (an even split
-        is required), the array is placed whole instead — correct, just
-        not partitioned — so this never raises on an awkward grid size.
+        distributed automatically.
+
+        NamedSharding needs the axis to divide evenly across the mesh, so
+        the axis is first **capacity-padded** with zeros up to the next
+        multiple of the device count.  That lets any device count (3, 5,
+        15, 27, ...) shard any grid size; the zero-padded cells carry zero
+        area, so they drop out of area-weighted reductions.  :meth:`unshard`
+        removes the padding again.
         """
         arr = jnp.asarray(array)
         devices = jax.devices()
         count = len(devices)
-        if count <= 1 or arr.ndim == 0 or arr.shape[axis] % count != 0:
+        if count <= 1 or arr.ndim == 0:
             return arr
+        remainder = arr.shape[axis] % count
+        if remainder:
+            widths = [(0, 0)] * arr.ndim
+            widths[axis] = (0, count - remainder)
+            arr = jnp.pad(arr, widths)  # constant zeros
         mesh = Mesh(numpy.asarray(devices), (self._CELL_AXIS,))
         spec: list[str | None] = [None] * arr.ndim
         spec[axis] = self._CELL_AXIS
         sharding = NamedSharding(mesh, PartitionSpec(*spec))
         return jax.device_put(arr, sharding)
+
+    def unshard(self, array: Any, count: int, axis: int = 0) -> Any:
+        """Return the first ``count`` cells on one device (padding dropped)."""
+        gathered = jax.device_get(array)
+        index: list[Any] = [slice(None)] * gathered.ndim
+        index[axis] = slice(0, count)
+        return jnp.asarray(gathered[tuple(index)])
 
     def shard_devices(self, array: Any) -> int:
         """Return how many devices hold a shard of ``array`` (1 if local)."""

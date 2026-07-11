@@ -75,9 +75,24 @@ class ArrayBackend(ABC):
         unchanged.  Device-mesh backends override this to split a per-cell
         field across the machine's GPUs while keeping it an ordinary
         Array-API value, so callers never handle placement themselves
-        ("the backend hides which device holds which shard").  A backend
-        that cannot split evenly must degrade to a whole (unsharded)
-        placement rather than raise — results stay correct, just local.
+        ("the backend hides which device holds which shard").
+
+        The axis is **capacity-padded** up to a multiple of the device
+        count so *any* count (3, 5, 15, 27, ...) shards *any* grid size;
+        the pad cells are the additive identity (0).  Because the sim is
+        area-weighted, padding the area field the same way gives those
+        cells zero weight, so they vanish from area-weighted reductions
+        with no masking.  Use :meth:`unshard` to recover the logical field
+        (padding dropped) for output or non-weighted reductions.
+        """
+        return array
+
+    def unshard(self, array: Any, count: int, axis: int = 0) -> Any:
+        """Return the first ``count`` cells, gathered onto one device.
+
+        Undoes :meth:`shard`: collects the shards and drops the capacity
+        padding, yielding the logical field.  The single-device default
+        never pads, so it returns ``array`` unchanged.
         """
         return array
 
