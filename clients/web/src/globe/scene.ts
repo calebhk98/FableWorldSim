@@ -1,10 +1,12 @@
 /**
  * Three.js scene: camera, renderer, orbit controls, and the globe's two
  * visual layers (a translucent base sphere for depth cues, and the DGGS
- * cell-point cloud carrying the data layer's colors). Points are real cell
- * centroids from `grid_geometry` (`cell-geometry.ts`) colored by a real
- * field from `query_field` (`field-layer.ts`) — see README.md's "Remaining
- * limits" for why cells render as points/discs rather than true polygons.
+ * cell layer carrying the data layer's colors). Cells are real polygons
+ * built from `grid_geometry`'s per-cell boundary vertices (`cell-geometry.ts`),
+ * triangulated as a fan around each cell's centroid and colored by a real
+ * field from `query_field` (`field-layer.ts`). If a world's geometry ever
+ * comes back without boundary data, this falls back to the previous
+ * billboarded-disc point cloud so the globe still renders something.
  */
 
 import * as THREE from "three";
@@ -29,6 +31,7 @@ export class GlobeScene {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
   private cellPoints: THREE.Points | null = null;
+  private cellPolygons: THREE.Mesh | null = null;
   private readonly discTexture: THREE.Texture;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -96,40 +99,36 @@ export class GlobeScene {
     return new THREE.LineSegments(geometry, material);
   }
 
-  /** (Re)build the cell-point cloud from real cell centroids, coloring each by `layer` via Viridis. */
+  /**
+   * (Re)build the cell layer from real cell geometry, coloring each cell by
+   * `layer` via Viridis. Renders true boundary polygons when every point
+   * carries at least a triangle's worth of boundary vertices; otherwise
+   * falls back to the centroid point cloud.
+   */
   setCells(points: CellPoint[], layer: FieldLayer): void {
+    this.clearCells();
+    if (points.length > 0 && points.every((point) => point.boundary.length >= 3)) {
+      this.cellPolygons = buildCellPolygons(points, layer);
+      this.scene.add(this.cellPolygons);
+    } else {
+      this.cellPoints = buildCellPointCloud(points, layer, this.discTexture);
+      this.scene.add(this.cellPoints);
+    }
+  }
+
+  private clearCells(): void {
     if (this.cellPoints) {
       this.scene.remove(this.cellPoints);
       this.cellPoints.geometry.dispose();
       (this.cellPoints.material as THREE.Material).dispose();
+      this.cellPoints = null;
     }
-
-    const positions = new Float32Array(points.length * 3);
-    const colors = new Float32Array(points.length * 3);
-    const span = layer.max - layer.min || 1;
-    points.forEach((point, i) => {
-      positions[i * 3] = point.x * GLOBE_RADIUS;
-      positions[i * 3 + 1] = point.y * GLOBE_RADIUS;
-      positions[i * 3 + 2] = point.z * GLOBE_RADIUS;
-      const t = (layer.values[i]! - layer.min) / span;
-      const { r, g, b } = viridis(t);
-      colors[i * 3] = r;
-      colors[i * 3 + 1] = g;
-      colors[i * 3 + 2] = b;
-    });
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    const material = new THREE.PointsMaterial({
-      size: pointSizeFor(points.length),
-      vertexColors: true,
-      map: this.discTexture,
-      alphaTest: 0.5,
-      transparent: true,
-    });
-    this.cellPoints = new THREE.Points(geometry, material);
-    this.scene.add(this.cellPoints);
+    if (this.cellPolygons) {
+      this.scene.remove(this.cellPolygons);
+      this.cellPolygons.geometry.dispose();
+      (this.cellPolygons.material as THREE.Material).dispose();
+      this.cellPolygons = null;
+    }
   }
 
   private handleResize(): void {
@@ -146,10 +145,79 @@ export class GlobeScene {
 }
 
 /**
+ * Build one filled polygon per cell from its ordered boundary vertices,
+ * triangulated as a fan from the centroid to each consecutive pair of
+ * boundary vertices (valid because DGGS cell boundaries are convex around
+ * their centroid). All cells are merged into a single indexed
+ * `THREE.BufferGeometry` so the whole layer is one draw call regardless of
+ * cell count. `DoubleSide` sidesteps having to reconcile each cell's
+ * boundary winding order with its outward sphere normal.
+ */
+function buildCellPolygons(points: CellPoint[], layer: FieldLayer): THREE.Mesh {
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  const span = layer.max - layer.min || 1;
+
+  points.forEach((point, i) => {
+    const t = (layer.values[i]! - layer.min) / span;
+    const { r, g, b } = viridis(t);
+    const centroidIndex = positions.length / 3;
+
+    positions.push(point.x * GLOBE_RADIUS, point.y * GLOBE_RADIUS, point.z * GLOBE_RADIUS);
+    colors.push(r, g, b);
+    for (const vertex of point.boundary) {
+      positions.push(vertex.x * GLOBE_RADIUS, vertex.y * GLOBE_RADIUS, vertex.z * GLOBE_RADIUS);
+      colors.push(r, g, b);
+    }
+
+    const vertexCount = point.boundary.length;
+    for (let k = 0; k < vertexCount; k += 1) {
+      indices.push(centroidIndex, centroidIndex + 1 + k, centroidIndex + 1 + ((k + 1) % vertexCount));
+    }
+  });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  const material = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  return new THREE.Mesh(geometry, material);
+}
+
+/** The pre-#62 fallback: one billboarded disc per cell centroid, for worlds whose geometry lacks boundaries. */
+function buildCellPointCloud(points: CellPoint[], layer: FieldLayer, discTexture: THREE.Texture): THREE.Points {
+  const positions = new Float32Array(points.length * 3);
+  const colors = new Float32Array(points.length * 3);
+  const span = layer.max - layer.min || 1;
+  points.forEach((point, i) => {
+    positions[i * 3] = point.x * GLOBE_RADIUS;
+    positions[i * 3 + 1] = point.y * GLOBE_RADIUS;
+    positions[i * 3 + 2] = point.z * GLOBE_RADIUS;
+    const t = (layer.values[i]! - layer.min) / span;
+    const { r, g, b } = viridis(t);
+    colors[i * 3] = r;
+    colors[i * 3 + 1] = g;
+    colors[i * 3 + 2] = b;
+  });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const material = new THREE.PointsMaterial({
+    size: pointSizeFor(points.length),
+    vertexColors: true,
+    map: discTexture,
+    alphaTest: 0.5,
+    transparent: true,
+  });
+  return new THREE.Points(geometry, material);
+}
+
+/**
  * A small radial-gradient canvas texture so each cell renders as a soft
- * billboarded disc rather than a hard square point sprite — an honest,
- * cheap stand-in for a true cell polygon (see the module docstring on why
- * polygons aren't available).
+ * billboarded disc rather than a hard square point sprite in the fallback
+ * point cloud above.
  */
 function makeDiscTexture(): THREE.Texture {
   const size = 64;
