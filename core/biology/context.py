@@ -13,6 +13,7 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from core.biology.disease import DiseaseParams
 from core.biology.suitability import (
     ALTITUDE_AXIS,
     COLDEST_SEASON_AXIS,
@@ -57,6 +58,7 @@ class BiologyParams:
     extinction_epsilon_per_m2: float = 1.0e-15
     wet_precip_mm: float = _DEFAULT_WET_PRECIP_MM
     fire: FireParams = field(default_factory=FireParams)
+    disease: DiseaseParams = field(default_factory=DiseaseParams)
 
 
 @dataclass(frozen=True)

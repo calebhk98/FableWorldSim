@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from core.biology.disease import apply_disease
 from core.biology.extinction import enforce_viability
 from core.biology.foodweb import FeedingParams, apply_offtake, feed_location
 from core.biology.migration import (
@@ -57,12 +58,17 @@ class DomainRunner:
         pops: Mapping[str, Mapping[str, float]],
         suitability: Mapping[str, Mapping[str, float]],
     ) -> _Fields:
-        """Feed, thin by offtake, grow, and diffuse — without the viability gate."""
+        """Feed, thin by offtake, grow, cull by disease, and diffuse (no viability gate)."""
         fed, offtaken = self._feed(species_ids, pops)
         result: _Fields = {}
+        disease_hits: dict[str, int] = {}
         for sid in species_ids:
             grown = self._grow(sid, offtaken[sid], suitability.get(sid, {}), fed.get(sid, {}))
-            result[sid] = self._migrate(sid, grown, suitability.get(sid, {}))
+            diseased, cells = self._disease(sid, grown)
+            if cells:
+                disease_hits[sid] = len(cells)
+            result[sid] = self._migrate(sid, diseased, suitability.get(sid, {}))
+        self._log_disease(disease_hits)
         return result
 
     def finalize(
@@ -127,6 +133,33 @@ class DomainRunner:
             no_habitat_decay_per_year=self.params.no_habitat_decay_per_year,
         )
         return grow(field, capacity, organism, fed_fraction, params)
+
+    def _disease(self, species_id: str, field: _Field) -> tuple[_Field, list[str]]:
+        """Run the density-dependent disease pass for one species.
+
+        Returns the (possibly culled) field and the cells an outbreak hit,
+        so the caller can log a die-off event only when one actually
+        happened.
+        """
+        return apply_disease(
+            species_id,
+            field,
+            self.params.disease,
+            self.dt_years,
+            self.rng.fork(f"disease:{species_id}:{self.tick}"),
+        )
+
+    def _log_disease(self, hits: Mapping[str, int]) -> None:
+        """Append one chronicle event per species an outbreak hit this step."""
+        if self.chronicle is None:
+            return
+        for sid, cell_count in hits.items():
+            self.chronicle.append(
+                tick=self.tick,
+                kind="disease",
+                subject=sid,
+                payload={"domain": self.domain, "cells": cell_count},
+            )
 
     def _migrate(
         self,
