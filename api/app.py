@@ -116,8 +116,11 @@ def _execute_command(command: Command, state: AppState, params: BaseModel) -> ob
         return command.handler(state, params)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+    except (ValidationError, ValueError, TypeError) as exc:
+        # Structural input errors (missing field, bad type, invalid value).
+        # ValueError/TypeError from handlers mean bad input, not a server bug.
+        detail = exc.errors() if isinstance(exc, ValidationError) else str(exc)
+        raise HTTPException(status_code=422, detail=detail) from exc
     except ComputeBackendUnavailableError as exc:
         # Valid request the host cannot satisfy (e.g. a GPU backend on a
         # CPU-only machine) — a conflict, not malformed input.
