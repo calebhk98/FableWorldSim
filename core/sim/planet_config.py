@@ -26,9 +26,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from core.sim.constants import (
+    EARTH_SURFACE_PRESSURE_PA,
     LUNAR_EQUILIBRIUM_TIDE_M,
     MOON_MASS_KG,
     MOON_SEMI_MAJOR_AXIS_M,
@@ -40,38 +41,131 @@ if TYPE_CHECKING:
 _TIDAL_LOCK_REL_TOL = 1e-6
 _LUNAR_TIDAL_FORCING = MOON_MASS_KG / MOON_SEMI_MAJOR_AXIS_M**3
 
+_GHG_ABSORPTION_COEFFICIENT: dict[str, float] = {
+    "CO2": 1.0,
+    "H2O": 8.0,
+    "CH4": 30.0,
+    "N2O": 200.0,
+    "SO2": 120.0,
+    "O3": 150.0,
+}
+"""Per-mole-fraction IR absorption strength, relative to CO2 = 1.
+
+Only species with a permanent or collision-induced dipole trap outgoing
+longwave radiation (water vapor, methane, nitrous oxide, sulfur dioxide,
+ozone); homonuclear background gases (N2, O2, Ar, H2, He, Ne, ...) are
+absent here and contribute exactly zero, however abundant -- "thick
+nitrogen" alone buys no warming. Coefficients are order-of-magnitude
+band-model ratios (roughly following real per-molecule IR opacity), not
+line-by-line spectroscopy; that is the right fidelity for M1's grey-gas
+energy balance (see ``core/climate/temperature.py``)."""
+
+_GREENHOUSE_CEILING_K = 510.0
+"""Saturation ceiling for greenhouse warming (kelvin), approached but
+never reached as optical depth grows without bound -- calibrated so a
+crushing, all-CO2, ~90-bar atmosphere (Venus) saturates close to its
+real ~505 K greenhouse warming."""
+
+
+def _coerce_satellites(sats: object) -> tuple[Satellite, ...]:
+    """Convert satellites field: list of dicts or Satellite -> tuple of Satellite.
+
+    Raises ValueError if invalid.
+    """
+    if not isinstance(sats, (list, tuple)):
+        msg = f"satellites must be list/tuple, got {type(sats).__name__}"
+        raise ValueError(msg)
+    sat_list = []
+    for sat in sats:
+        if isinstance(sat, dict):
+            try:
+                sat_list.append(Satellite(**sat))
+            except (TypeError, ValueError) as exc:
+                msg = f"invalid satellite specification: {exc}"
+                raise ValueError(msg) from exc
+        elif isinstance(sat, Satellite):
+            sat_list.append(sat)
+        else:
+            msg = f"satellite must be dict/Satellite, got {type(sat).__name__}"
+            raise ValueError(msg)
+    return tuple(sat_list)
+
 
 @dataclass(frozen=True)
 class Atmosphere:
-    """Bulk atmosphere: composition, surface pressure, greenhouse strength.
+    """Bulk atmosphere: composition and surface pressure.
 
-    ``greenhouse_offset_k`` is the first-order warming over the airless
-    equilibrium temperature (Earth ~33 K, Venus ~505 K, airless 0).
-    ``composition`` maps species name to mole fraction.
+    Greenhouse strength is *derived* from them (see
+    ``greenhouse_offset_k`` below), never a hand-supplied literal -- so
+    Venus-thick, Mars-thin, and airless all fall out of composition +
+    pressure, not per-planet constants. ``composition`` maps species
+    name to mole fraction.
     """
 
     surface_pressure_pa: float
-    greenhouse_offset_k: float = 0.0
     composition: Mapping[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Validate pressure and greenhouse strength."""
+        """Validate pressure."""
         if self.surface_pressure_pa < 0:
             msg = f"surface pressure must be >= 0, got {self.surface_pressure_pa}"
-            raise ValueError(msg)
-        if self.greenhouse_offset_k < 0:
-            msg = f"greenhouse offset must be >= 0, got {self.greenhouse_offset_k}"
             raise ValueError(msg)
 
     @classmethod
     def airless(cls) -> Atmosphere:
         """Return a no-atmosphere config (Moon-like)."""
-        return cls(surface_pressure_pa=0.0, greenhouse_offset_k=0.0)
+        return cls(surface_pressure_pa=0.0)
 
     @property
     def is_airless(self) -> bool:
         """Return whether there is effectively no atmosphere."""
         return self.surface_pressure_pa == 0.0
+
+    @property
+    def greenhouse_optical_depth(self) -> float:
+        """Return the dimensionless grey-gas IR optical depth.
+
+        Each greenhouse-active species' column amount scales with its
+        partial pressure -- mole fraction times surface pressure,
+        normalized to Earth's -- weighted by its relative absorption
+        strength (``_GHG_ABSORPTION_COEFFICIENT``); the contributions
+        sum linearly. Zero for a vacuum or a purely non-absorbing mix
+        (pure N2, say), however thick.
+        """
+        if self.surface_pressure_pa <= 0.0:
+            return 0.0
+        pressure_ratio = self.surface_pressure_pa / EARTH_SURFACE_PRESSURE_PA
+        ghg_mole_fraction = sum(
+            self.composition.get(species, 0.0) * coefficient
+            for species, coefficient in _GHG_ABSORPTION_COEFFICIENT.items()
+        )
+        return pressure_ratio * ghg_mole_fraction
+
+    @property
+    def greenhouse_saturation(self) -> float:
+        """Return how saturated the greenhouse effect is, in [0, 1).
+
+        A smooth, monotone function of optical depth that approaches
+        (never reaches) 1: a wisp of absorber lets nearly all of it
+        through (small fraction), a crushing column is nearly opaque
+        (fraction near 1). This is also used to boost lateral heat
+        transport efficiency (see ``core.climate.temperature``): a
+        radiatively opaque atmosphere mixes heat better, not just a
+        physically thick one.
+        """
+        return -math.expm1(-self.greenhouse_optical_depth)
+
+    @property
+    def greenhouse_offset_k(self) -> float:
+        """Return the greenhouse warming over the airless equilibrium, in K.
+
+        ``_GREENHOUSE_CEILING_K * greenhouse_saturation``: a trace of
+        CO2 over a thin column (Mars) buys a few kelvin, Earth's dilute
+        water vapor + CO2 over a full atmosphere buys tens, and Venus's
+        crushing, all-CO2 blanket saturates near the ceiling -- derived
+        from composition and pressure, never a per-planet literal.
+        """
+        return _GREENHOUSE_CEILING_K * self.greenhouse_saturation
 
 
 @dataclass(frozen=True)
@@ -211,3 +305,49 @@ class PlanetConfig:
         """
         forcing = sum(moon.tidal_forcing for moon in self.satellites)
         return LUNAR_EQUILIBRIUM_TIDE_M * forcing / _LUNAR_TIDAL_FORCING
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> PlanetConfig:
+        """Construct PlanetConfig from a dict, coercing nested dicts to dataclasses.
+
+        Converts nested ``atmosphere`` and ``satellites`` dicts to their
+        respective dataclass types. Raises ``ValueError`` if invalid.
+
+        This is the robust path for round-tripping: pass the result of
+        ``dataclasses.asdict(preset)`` here to reconstruct the config.
+
+        Args:
+            data: A dict with ``atmosphere`` and ``satellites`` optionally
+                as dicts instead of objects.
+
+        Returns:
+            A validated PlanetConfig instance.
+
+        Raises:
+            ValueError: If the dict is structurally invalid.
+        """
+        params: dict[str, Any] = dict(data)
+
+        # Coerce atmosphere: dict -> Atmosphere, or validate it's an Atmosphere
+        if "atmosphere" in params:
+            atm = params["atmosphere"]
+            if isinstance(atm, dict):
+                try:
+                    params["atmosphere"] = Atmosphere(**atm)
+                except (TypeError, ValueError) as exc:
+                    msg = f"invalid atmosphere specification: {exc}"
+                    raise ValueError(msg) from exc
+            elif not isinstance(atm, Atmosphere):
+                msg = f"atmosphere must be a dict or Atmosphere, got {type(atm).__name__}"
+                raise ValueError(msg)
+
+        # Coerce satellites: list of dicts -> tuple of Satellite
+        if "satellites" in params:
+            params["satellites"] = _coerce_satellites(params["satellites"])
+
+        # Construct PlanetConfig, converting TypeError to ValueError.
+        try:
+            return cls(**params)
+        except TypeError as exc:
+            msg = f"missing or invalid field in planet config: {exc}"
+            raise ValueError(msg) from exc

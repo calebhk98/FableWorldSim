@@ -43,9 +43,6 @@ EARTH_OCEAN_FRACTION = 0.708
 EARTH_SURFACE_PRESSURE_PA = 101_325.0
 """Earth's mean sea-level atmospheric pressure in pascals."""
 
-EARTH_GREENHOUSE_OFFSET_K = 33.0
-"""Earth's greenhouse warming over its airless equilibrium, in kelvin."""
-
 MOON_MASS_KG = 7.342e22
 """Mass of Earth's Moon in kilograms."""
 

@@ -105,6 +105,10 @@ class H3Grid(Grid):
         """Return the cell containing a latitude/longitude point."""
         return h3.latlng_to_cell(point.lat_deg, point.lon_deg, self._resolution)
 
+    def boundary(self, cell: CellId) -> Sequence[LatLon]:
+        """Return the ordered boundary vertices (6, or 5 for a pentagon)."""
+        return tuple(LatLon(lat, lon) for lat, lon in h3.cell_to_boundary(cell))
+
 
 def create(resolution: int, radius_m: float) -> Grid:
     """Create an :class:`H3Grid`; registry entry point for backend 'h3'."""

@@ -16,8 +16,15 @@ from pydantic import BaseModel, Field
 
 from adapters.grid_registry import available_backends
 from adapters.hardware import probe_host, recommend
+from api.scenario_commands import (
+    BuildWorldParams,
+    ListScenariosParams,
+    build_world_command,
+    list_scenarios,
+)
 from api.settings import get_setting, setting_paths, with_setting
 from api.state import AppState
+from api.world_commands import register_world_commands
 from api.world_service import report_to_dict, run_world_sweep
 from api.ws_events import SettingChangedEvent
 from core.sim.world_sweep import SweepReport
@@ -315,4 +322,25 @@ def build_default_registry() -> CommandRegistry:
             mutates=True,
         )
     )
+    registry.register(
+        Command(
+            "list_scenarios",
+            "Return all available scenario presets (earth, mars, venus, luna, etc.) "
+            "with names and descriptions.",
+            ListScenariosParams,
+            list_scenarios,
+            mutates=False,
+        )
+    )
+    registry.register(
+        Command(
+            "build_world",
+            "Build a world from a seed and a named preset or custom PlanetConfig. "
+            "Returns a summary of the generated world's properties.",
+            BuildWorldParams,
+            build_world_command,
+            mutates=True,
+        )
+    )
+    register_world_commands(registry, Command)
     return registry

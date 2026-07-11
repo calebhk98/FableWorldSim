@@ -63,6 +63,7 @@ def _surface_suitability(ctx: BiologyContext, species_ids: Sequence[str]) -> _Fi
         biome_field=ctx.biome_field,
         sea_mask=ctx.sea_mask,
         base_preference=ctx.params.base_biome_preference,
+        lake_mask=ctx.lake_mask,
     )
     cells = list(ctx.grid.cells())
     return {sid: surface_suitability(ctx.organisms[sid], cells, environment) for sid in species_ids}

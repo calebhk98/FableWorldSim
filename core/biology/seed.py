@@ -50,6 +50,7 @@ def _seed_surface(ctx: BiologyContext, organism: Organism, fraction: float) -> d
         biome_field=ctx.biome_field,
         sea_mask=ctx.sea_mask,
         base_preference=ctx.params.base_biome_preference,
+        lake_mask=ctx.lake_mask,
     )
     suitability = surface_suitability(organism, list(ctx.grid.cells()), environment)
     return _seed_field(organism, suitability, fraction)

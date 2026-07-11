@@ -133,6 +133,34 @@ def _split_food_pool(
     return taken
 
 
+def reachable_food_biomass(
+    organism: Organism,
+    populations: Mapping[str, Mapping[str, float]],
+    organisms: Mapping[str, Organism],
+) -> dict[str, float]:
+    """Return each location's diet-weighted biomass reachable by a consumer.
+
+    Sums, per location, ``preference x standing biomass`` over every food
+    species in ``organism``'s diet that is present there — the same
+    preference weighting :func:`feed_location` uses to split a shared food
+    pool, now feeding the food-limited term of carrying capacity
+    (:func:`core.biology.population.env_capacity`) instead of one tick's
+    offtake.  An autotroph's diet is always empty, so this is always empty
+    for it too — its own suitability alone gates its capacity.
+    """
+    reachable: dict[str, float] = {}
+    for food_id, preference in organism.diet.items():
+        food_field = populations.get(food_id)
+        if not food_field:
+            continue
+        food_org = organisms[food_id]
+        for loc, value in food_field.items():
+            if value <= 0.0:
+                continue
+            reachable[loc] = reachable.get(loc, 0.0) + preference * _biomass(value, food_org)
+    return reachable
+
+
 def apply_offtake(
     value: float,
     organism: Organism,

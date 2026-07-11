@@ -27,6 +27,7 @@ from api.commands import (
     apply_setting,
     build_default_registry,
 )
+from api.scenario_commands import scenario_summaries
 from api.settings import Settings, get_setting, load_settings, setting_paths
 from api.state import AppState, EventBus
 from api.ws_events import HelloEvent, ws_schema
@@ -115,8 +116,11 @@ def _execute_command(command: Command, state: AppState, params: BaseModel) -> ob
         return command.handler(state, params)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+    except (ValidationError, ValueError, TypeError) as exc:
+        # Structural input errors (missing field, bad type, invalid value).
+        # ValueError/TypeError from handlers mean bad input, not a server bug.
+        detail = exc.errors() if isinstance(exc, ValidationError) else str(exc)
+        raise HTTPException(status_code=422, detail=detail) from exc
     except ComputeBackendUnavailableError as exc:
         # Valid request the host cannot satisfy (e.g. a GPU backend on a
         # CPU-only machine) — a conflict, not malformed input.
@@ -135,6 +139,11 @@ def _register_discovery(app: FastAPI, state: AppState, registry: CommandRegistry
     def commands() -> list[dict[str, Any]]:
         """List every command with its parameter JSON Schema."""
         return registry.describe()
+
+    @app.get("/scenarios")
+    def scenarios() -> dict[str, Any]:
+        """List available scenario presets (earth, mars, venus, luna, etc.)."""
+        return {"scenarios": scenario_summaries()}
 
     @app.post("/commands/{name}")
     def run_command(

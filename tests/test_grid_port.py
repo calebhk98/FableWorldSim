@@ -84,6 +84,15 @@ class FakeGrid(Grid):
         """Return the first cell (adequate for port tests)."""
         return _FAKE_CELLS[0]
 
+    def boundary(self, cell: CellId) -> Sequence[LatLon]:
+        """Return a small triangle of vertices straddling the centroid."""
+        center = self.centroid(cell)
+        offsets = ((0.1, 0.0), (-0.05, 0.1), (-0.05, -0.1))
+        return tuple(
+            LatLon(lat_deg=center.lat_deg + dlat, lon_deg=center.lon_deg + dlon)
+            for dlat, dlon in offsets
+        )
+
 
 def _fake_factory(resolution: int, radius_m: float) -> Grid:
     """Build a FakeGrid; registered under the 'fake' toggle name."""
@@ -113,10 +122,25 @@ def test_registry_rejects_unknown_backend() -> None:
         create_grid("square-lattice", resolution=1)
 
 
-def test_isea_backend_reports_unavailable() -> None:
-    """The equal-area ISEA backend is a known toggle but not yet wired."""
-    with pytest.raises(GridBackendUnavailableError, match="isea"):
+def test_isea_names_the_missing_binary_when_unavailable() -> None:
+    """'isea' fails loudly and namedly when it can't run.
+
+    This only certifies the graceful-degradation path when ISEA is
+    unavailable — either the ``dggrid4py`` package isn't installed (CI's
+    extras deliberately don't include it, so the error names the
+    ``grid-isea`` extra) or the package is present but the ``dggrid``
+    binary is missing (the error names ``dggrid``). It is not ISEA
+    coverage. Real backend behavior is exercised in
+    ``test_grid_backends.py`` and ``test_conservation.py``, which run
+    whenever a working ``dggrid`` actually is on ``PATH``.
+    """
+    try:
         create_grid("isea", resolution=1)
+    except GridBackendUnavailableError as exc:
+        msg = str(exc).lower()
+        assert "dggrid" in msg or "grid-isea" in msg
+    else:
+        pytest.skip("a working ISEA/'dggrid' backend is available in this environment")
 
 
 def test_total_area_matches_sphere() -> None:
@@ -139,3 +163,15 @@ def test_edge_length_requires_adjacency() -> None:
     grid = FakeGrid(0, 1_000.0)
     with pytest.raises(ValueError, match="not adjacent"):
         grid.edge_length_m("c0", "c0")
+
+
+def test_boundary_is_a_ring_of_at_least_three_vertices_near_the_centroid() -> None:
+    """Every cell's boundary has >=3 vertices, each close to its centroid."""
+    grid = FakeGrid(0, 1_000.0)
+    for cell in grid.cells():
+        boundary = grid.boundary(cell)
+        assert len(boundary) >= 3
+        centroid = grid.centroid(cell)
+        for vertex in boundary:
+            assert abs(vertex.lat_deg - centroid.lat_deg) < 1.0
+            assert abs(vertex.lon_deg - centroid.lon_deg) < 1.0

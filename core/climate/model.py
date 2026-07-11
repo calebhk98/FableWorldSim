@@ -140,16 +140,25 @@ def _couple_ocean(
     return coupled
 
 
-def simulate_climate(
+def simulate_climate(  # noqa: PLR0913 - one param per physical input the season loop needs
     grid: Grid,
     planet: PlanetConfig,
     heights_m: Mapping[CellId, float],
     sea_mask: SeaMask,
     season_count: int = 4,
+    lake_mask: Mapping[CellId, bool] | None = None,
 ) -> ClimateState:
     """Run the seasonal climate and return all fields.
 
     ``season_count`` is a fidelity knob (4 = quarterly, 12 = monthly).
+    ``lake_mask`` (optional, e.g. a solved
+    ``core.hydrology.lakes.LakeNetwork.is_lake``) lets a lake surface
+    evaporate like open water (see
+    ``core.climate.moisture.evaporation_field``); omitted, evaporation is
+    ocean-only as before. Lakes are themselves solved from a completed
+    climate run's precipitation (see ``core.hydrology.lakes``), so a
+    caller that wants the coupling feeds back a previous run's lake mask
+    rather than one derived from this same call.
     """
     if season_count < 1:
         msg = f"season_count must be >= 1, got {season_count}"
@@ -175,7 +184,12 @@ def simulate_climate(
         precip = precipitation_field(
             grid,
             MoistureInputs(
-                temps=temps, winds=winds, heights_m=heights_m, sea_mask=sea_mask, ice=ice
+                temps=temps,
+                winds=winds,
+                heights_m=heights_m,
+                sea_mask=sea_mask,
+                ice=ice,
+                lake_mask=lake_mask if lake_mask is not None else {},
             ),
         )
         seasons.append(

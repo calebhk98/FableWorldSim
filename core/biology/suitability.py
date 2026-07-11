@@ -13,7 +13,7 @@ instead of the surface.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from core.biology.medium import medium_allows
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
     from core.biology.organism import Organism
     from core.hydrology.sea_mask import SeaMask
+    from ports.grid import CellId
 
 # Axis ids the base game feeds into the trait bands; a mod may add more,
 # and any axis a species declares but that a cell lacks is simply skipped.
@@ -60,14 +61,18 @@ class SurfaceEnvironment:
     """The surface fields suitability is scored against, bundled once.
 
     ``axis_fields`` maps each environmental axis to its per-cell values;
-    ``biome_field`` gives each land cell's biome id; ``sea_mask`` drives the
-    medium gate; ``base_preference`` is the weight for an unlisted biome.
+    ``biome_field`` gives each land cell's biome id; ``sea_mask`` and
+    ``lake_mask`` together drive the medium gate (a lake cell counts as
+    water exactly like an ocean cell — see
+    ``core.biology.medium.medium_allows``); ``base_preference`` is the
+    weight for an unlisted biome.
     """
 
     axis_fields: Mapping[str, Mapping[str, float]]
     biome_field: Mapping[str, str]
     sea_mask: SeaMask
     base_preference: float = _DEFAULT_BASE_BIOME_PREFERENCE
+    lake_mask: Mapping[CellId, bool] = field(default_factory=dict)
 
 
 def env_response(organism: Organism, axis_values: Mapping[str, float]) -> float:
@@ -105,7 +110,7 @@ def surface_suitability(
     """
     result: dict[str, float] = {}
     for cell in cells:
-        if not medium_allows(organism.medium, cell, environment.sea_mask):
+        if not medium_allows(organism.medium, cell, environment.sea_mask, environment.lake_mask):
             continue
         values = {
             axis: field[cell] for axis, field in environment.axis_fields.items() if cell in field

@@ -112,15 +112,34 @@ def _domain_territory(
     return resolved
 
 
-def _economy_pass(state: WorldCivState, scope: _StepScope) -> WorldCivState:
-    """Extract resources, feed and grow every civ, regrow shared biomass."""
+def _economy_pass(
+    state: WorldCivState,
+    scope: _StepScope,
+    biomass_override: Mapping[CellId, float] | None = None,
+) -> WorldCivState:
+    """Extract resources, feed and grow every civ.
+
+    ``biomass_override`` is the coupled-simulation seam: when the
+    civilization layer is wired to a live biology run (see
+    :mod:`core.sim.coupling`), the *same* standing plant biomass the food
+    web maintains is passed in here and drawn down directly, with no
+    regrowth of its own — biology's own growth pass is the only thing
+    that ever regrows it, so both layers stay in perfect agreement about
+    how much is standing.  A standalone civilization run (no biology
+    layer wired in, e.g. the unit tests in this package) has nothing to
+    read from, so it keeps its self-contained logistic regrowth toward
+    ``ctx.biomass_capacity_kg_m2`` exactly as before.
+    """
     ctx = scope.ctx
-    biomass = regrow_biomass(
-        state.plant_biomass_kg_m2,
-        ctx.biomass_capacity_kg_m2,
-        ctx.params.biomass_regrowth_per_year,
-        scope.dt_years,
-    )
+    if biomass_override is not None:
+        biomass = dict(biomass_override)
+    else:
+        biomass = regrow_biomass(
+            state.plant_biomass_kg_m2,
+            ctx.biomass_capacity_kg_m2,
+            ctx.params.biomass_regrowth_per_year,
+            scope.dt_years,
+        )
     mine_stocks = {rid: dict(stocks) for rid, stocks in state.mine_stocks.items()}
     civs = []
     for civ in state.civs:
@@ -203,14 +222,19 @@ def _research_gain(state: WorldCivState, scope: _StepScope, civ: Civilization) -
     )
 
 
-def step_civilization(
+def step_civilization(  # noqa: PLR0913 - one param per simulation input
     state: WorldCivState,
     ctx: CivContext,
     rng: Rng,
     dt_s: float,
     chronicle: Chronicle | None = None,
+    biomass_override: Mapping[CellId, float] | None = None,
 ) -> WorldCivState:
-    """Advance the whole civilization layer by one step of ``dt_s`` seconds."""
+    """Advance the whole civilization layer by one step of ``dt_s`` seconds.
+
+    ``biomass_override`` forwards to :func:`_economy_pass` — see there for
+    what it means to the shared plant-biomass coupling.
+    """
     scope = _StepScope(
         ctx=ctx,
         rng=rng,
@@ -219,7 +243,7 @@ def step_civilization(
         effects={civ.civ_id: combined_effects(civ.unlocked_techs, ctx.techs) for civ in state.civs},
     )
     state = _territory_pass(state, scope)
-    state = _economy_pass(state, scope)
+    state = _economy_pass(state, scope, biomass_override)
     state = _research_pass(state, scope)
     state = update_settlements(state, ctx, scope.rng, chronicle)
     return replace(state, tick=state.tick + 1)

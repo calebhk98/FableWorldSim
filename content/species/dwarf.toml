@@ -20,6 +20,8 @@ crowding_cap_per_m2 = 8e-5
 lifespan_years = 120
 maturity_years = 20
 litter_size = 1.0
+gestation_years = 1.0
+fertility_window_years = 80
 
 [propensity]
 mining = 2.5

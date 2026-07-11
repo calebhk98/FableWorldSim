@@ -1,8 +1,11 @@
 """Moisture: evaporation, downwind transport, orographic rain and shadow.
 
 Evaporation over ice-free water supplies humidity; winds carry it
-cell-to-cell over the neighbor graph; rain falls from convergence and
-from **orographic lift** (ascending toward higher terrain rains on the
+cell-to-cell over the neighbor graph; rain falls from **convergence** —
+computed from the actual divergence of the wind field over the DGGS
+neighbor graph, so air piling into a low rains more and air spreading
+out of a high rains less, rather than a flat per-hop fraction — and from
+**orographic lift** (ascending toward higher terrain rains on the
 windward slope and leaves the lee side in shadow).  Tall ranges deplete
 crossing moisture almost entirely — the Himalaya/Tibet barrier effect —
 because shadowing is emergent from depletion, not scripted.
@@ -11,11 +14,11 @@ because shadowing is emergent from depletion, not scripted.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from core.climate.temperature import FREEZING_POINT_K
-from core.grid.vectors import unit_direction
+from core.grid.vectors import divergence, unit_direction
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -27,7 +30,8 @@ if TYPE_CHECKING:
 _EVAPORATION_FULL_K = 303.0
 _EVAPORATION_ZERO_K = 243.0
 _LAND_EVAPORATION_FACTOR = 0.15
-_BASE_RAINOUT_FRACTION = 0.25
+_BASE_RAINOUT_FRACTION = 0.10
+_CONVERGENCE_RAINOUT_SCALE_S = 2.0e4
 _OROGRAPHIC_FULL_UPLIFT_M = 1_500.0
 _MAX_RAINOUT_FRACTION = 0.95
 _TRANSPORT_HOPS = 5
@@ -39,19 +43,25 @@ def evaporation_field(
     temps: Mapping[CellId, float],
     sea_mask: SeaMask,
     ice: Mapping[CellId, bool],
+    lake_mask: Mapping[CellId, bool] | None = None,
 ) -> dict[CellId, float]:
     """Return per-cell humidity sourced by evaporation (dimensionless).
 
     Warm open water evaporates fully; frozen or cold surfaces barely at
-    all; land contributes a small soil/vegetation term.
+    all; land contributes a small soil/vegetation term. ``lake_mask``
+    (optional, e.g. ``core.hydrology.lakes.LakeNetwork.is_lake``) makes a
+    lake cell evaporate like open water too, instead of falling back to
+    the land term; omitting it (the default) reproduces the ocean-only
+    behavior every existing caller relies on.
     """
     humidity = {}
     for cell, temp in temps.items():
         warmth = (temp - _EVAPORATION_ZERO_K) / (_EVAPORATION_FULL_K - _EVAPORATION_ZERO_K)
         strength = min(1.0, max(0.0, warmth)) ** 2
+        is_water = sea_mask.ocean[cell] or (lake_mask is not None and lake_mask.get(cell, False))
         if ice[cell]:
             strength *= 0.05
-        elif not sea_mask.ocean[cell]:
+        elif not is_water:
             strength *= _LAND_EVAPORATION_FACTOR
         humidity[cell] = strength
     return humidity
@@ -77,11 +87,37 @@ def downwind_neighbor(
     return best[1]
 
 
-def _rainout_fraction(origin_height: float, target_height: float, origin_is_ocean: bool) -> float:
-    """Return the fraction of moving moisture that rains this hop."""
+def _convergence_rainout_term(divergence_per_s: float) -> float:
+    """Return the rainout-fraction contribution from wind-field convergence.
+
+    Converging air (negative divergence, net inflow) piles moisture
+    upward and rains it out; diverging air (positive divergence, net
+    outflow / subsidence) suppresses rainout below the background rate.
+    The scale below converts a typical surface-wind divergence
+    magnitude (order 1e-5 .. 1e-4 /s, from ~m/s wind differences over
+    DGGS-cell-scale distances) into an O(0.1 .. 0.5) fraction swing.
+    """
+    return -divergence_per_s * _CONVERGENCE_RAINOUT_SCALE_S
+
+
+def _rainout_fraction(
+    origin_height: float,
+    target_height: float,
+    origin_is_ocean: bool,
+    convergence_term: float,
+) -> float:
+    """Return the fraction of moving moisture that rains this hop.
+
+    Three additive terms, clipped to ``[0, _MAX_RAINOUT_FRACTION]``: a
+    small background rate (independent of dynamics), an orographic term
+    when the parcel is forced upslope, and the convergence term derived
+    from the wind field's actual divergence (see
+    ``_convergence_rainout_term``).
+    """
     uplift = max(0.0, target_height - origin_height)
     orographic = 0.0 if origin_is_ocean else uplift / _OROGRAPHIC_FULL_UPLIFT_M
-    return min(_MAX_RAINOUT_FRACTION, _BASE_RAINOUT_FRACTION + orographic)
+    fraction = _BASE_RAINOUT_FRACTION + orographic + convergence_term
+    return min(_MAX_RAINOUT_FRACTION, max(0.0, fraction))
 
 
 @dataclass(frozen=True)
@@ -93,6 +129,9 @@ class MoistureInputs:
     heights_m: Mapping[CellId, float]
     sea_mask: SeaMask
     ice: Mapping[CellId, bool]
+    lake_mask: Mapping[CellId, bool] = field(default_factory=dict)
+    """Per-cell ``is_lake`` field (optional); lets a lake surface evaporate
+    like open water alongside the ocean (see :func:`evaporation_field`)."""
 
 
 def precipitation_field(
@@ -102,12 +141,18 @@ def precipitation_field(
 ) -> dict[CellId, float]:
     """Return per-cell precipitation in mm/year for one season.
 
-    Humidity advects downwind for a few hops; each hop rains out a base
-    convergence fraction plus an orographic term where the parcel is
-    forced upslope, so windward slopes are wet and lee sides dry.
-    Whatever survives the journey falls as drizzle where it ends up.
+    Humidity advects downwind for a few hops; each hop rains out a small
+    background fraction, a convergence term derived from the wind
+    field's actual divergence over the neighbor graph (piling air rains
+    more, spreading air rains less), and an orographic term where the
+    parcel is forced upslope, so windward slopes are wet and lee sides
+    dry. Whatever survives the journey falls as drizzle where it ends
+    up.
     """
-    humidity = evaporation_field(inputs.temps, inputs.sea_mask, inputs.ice)
+    humidity = evaporation_field(inputs.temps, inputs.sea_mask, inputs.ice, inputs.lake_mask)
+    convergence_term = {
+        cell: _convergence_rainout_term(divergence(inputs.winds, grid, cell)) for cell in humidity
+    }
     rain = dict.fromkeys(humidity, 0.0)
     for _ in range(hops):
         moved = dict.fromkeys(humidity, 0.0)
@@ -122,6 +167,7 @@ def precipitation_field(
                 inputs.heights_m[cell],
                 inputs.heights_m[target],
                 inputs.sea_mask.ocean[cell],
+                convergence_term[cell],
             )
             rain[cell] += load * fraction
             moved[target] += load * (1.0 - fraction)
