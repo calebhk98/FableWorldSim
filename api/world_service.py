@@ -9,7 +9,8 @@ exposed over the API (see the ``run_world_sweep`` command).
 
 Fast preview: coarse grid, two seasons, biome classification -> habitability
 score. Deep run (winners only): four seasons, a routed river network, and a
-seeded biology run whose wall-clock telemetry is captured.
+seeded biology + civilization run -- coupled through one shared plant-biomass
+field -- whose wall-clock telemetry is captured.
 """
 
 from __future__ import annotations
@@ -25,12 +26,19 @@ from adapters.kernels_python import flow_accumulation
 from adapters.rng_seeded import SeededRng
 from core.biology.biome import biome_field, load_biomes
 from core.biology.context import LayersBelow, build_biology_context
-from core.biology.engine import BiologyProcess
 from core.biology.organism import load_organisms
 from core.biology.seed import seed_biosphere
+from core.civilization.context import CivContext
+from core.civilization.economy import biomass_capacity_from_biomes
+from core.civilization.founding import found_civilizations
+from core.civilization.resources import load_resources
+from core.civilization.species import load_species
+from core.civilization.state import civ_population_total
+from core.civilization.tech import load_techs
 from core.climate.model import simulate_climate
 from core.hydrology.rivers import build_river_network
 from core.hydrology.sea_mask import build_sea_mask
+from core.sim.coupling import CoupledContext, CoupledProcess, WorldState
 from core.sim.orchestrator import Orchestrator
 from core.sim.presets import earth
 from core.sim.world_sweep import SweepReport, habitability_score, run_sweep
@@ -41,7 +49,9 @@ if TYPE_CHECKING:
 
     from core.biology.biome import BiomeDefinition
     from core.biology.organism import Organism
-    from core.biology.state import WorldBiologyState
+    from core.civilization.resources import ResourceDefinition
+    from core.civilization.species import SpeciesDefinition
+    from core.civilization.tech import TechDefinition
     from core.climate.model import ClimateState
     from core.hydrology.sea_mask import SeaMask
     from ports.grid import CellId, Grid
@@ -52,6 +62,8 @@ _DEEP_SEASONS = 4
 _CHANNEL_THRESHOLD_CELL_MULTIPLE = 4.0
 _DEFAULT_RESOLUTION = 1
 _DEFAULT_DEEP_TICKS = 5
+_PEAK_BIOMASS_CAPACITY_KG_M2 = 5.0
+"""Peak standing biomass (fully vegetated biome) civ capital-siting scores by."""
 
 
 @dataclass(frozen=True)
@@ -70,6 +82,22 @@ def _content() -> tuple[tuple[Organism, ...], tuple[BiomeDefinition, ...]]:
     """Load and cache the base content's organisms and biomes."""
     registry = TomlContentRegistry([("base", _REPO_CONTENT)])
     return load_organisms(registry), load_biomes(registry)
+
+
+@functools.lru_cache(maxsize=1)
+def _civ_content() -> tuple[
+    tuple[SpeciesDefinition, ...], tuple[ResourceDefinition, ...], tuple[TechDefinition, ...]
+]:
+    """Load and cache the civilization layer's species, resources, and techs.
+
+    Species content lives in the same ``content/species`` directory
+    ``_content`` reads for biology organisms (each file doubles as an
+    ``Organism`` and, for the sapient ones, a ``SpeciesDefinition``), so
+    both loaders point at the same registry and the same species ids line
+    up across layers for free.
+    """
+    registry = TomlContentRegistry([("base", _REPO_CONTENT)])
+    return load_species(registry), load_resources(registry), load_techs(registry)
 
 
 def build_world(seed: int, *, resolution: int, season_count: int) -> FastWorld:
@@ -111,8 +139,11 @@ def deepen_seed(
     """Run the expensive simulation on one winner and summarize it.
 
     Rebuilds the world at higher seasonal fidelity, routes a river network,
-    and steps a seeded biology run under the orchestrator — capturing its
-    wall-clock telemetry. Returns a JSON-able summary.
+    and steps a seeded biology + civilization run under the orchestrator —
+    the two layers coupled through one shared plant-biomass field (see
+    :mod:`core.sim.coupling`), so a civ's forestry and farmland measurably
+    draw down what the food web itself depends on. Captures wall-clock
+    telemetry and returns a JSON-able summary.
     """
     world = build_world(seed, resolution=resolution, season_count=_DEEP_SEASONS)
     rivers = build_river_network(
@@ -123,20 +154,41 @@ def deepen_seed(
         precipitation_mm_yr=world.climate.annual_precipitation_mm_yr,
         channel_threshold_m2=_CHANNEL_THRESHOLD_CELL_MULTIPLE * _mean_cell_area(world.grid),
     )
-    organisms, _biomes = _content()
+    organisms, biomes = _content()
+    species, resources, techs = _civ_content()
     below = LayersBelow(
         world.grid, world.climate, world.sea_mask, world.heights_m, world.biome_field
     )
-    ctx = build_biology_context(below, {org.species_id: org for org in organisms})
-    state = seed_biosphere(ctx)
-    orchestrator: Orchestrator[WorldBiologyState] = Orchestrator()
-    orchestrator.register(BiologyProcess(ctx, SeededRng(seed)))
+    bio_ctx = build_biology_context(below, {org.species_id: org for org in organisms})
+    civ_ctx = CivContext(
+        grid=world.grid,
+        heights_m=world.heights_m,
+        sea_mask=world.sea_mask,
+        species={spec.species_id: spec for spec in species},
+        techs=techs,
+        resources=resources,
+        biomass_capacity_kg_m2=biomass_capacity_from_biomes(
+            world.biome_field, biomes, _PEAK_BIOMASS_CAPACITY_KG_M2
+        ),
+    )
+    rng = SeededRng(seed)
+    state = WorldState(
+        biology=seed_biosphere(bio_ctx),
+        civ=found_civilizations(civ_ctx, rng.fork("founding")),
+    )
+    coupled_ctx = CoupledContext(bio_ctx=bio_ctx, civ_ctx=civ_ctx, organisms=organisms)
+    orchestrator: Orchestrator[WorldState] = Orchestrator()
+    orchestrator.register(CoupledProcess(coupled_ctx, rng))
     state = orchestrator.run(state, ticks=ticks)
     telemetry = orchestrator.telemetry
 
     channel_count = sum(1 for on in rivers.is_channel.values() if on)
     populations = {
-        species: sum(field.values()) for species, field in state.surface_populations.items()
+        species_id: sum(field.values())
+        for species_id, field in state.biology.surface_populations.items()
+    }
+    civ_population = {
+        civ.civ_id: civ_population_total(world.grid, civ) for civ in state.civ.civs
     }
     return {
         "seed": seed,
@@ -144,6 +196,7 @@ def deepen_seed(
         "biology_ticks": ticks,
         "surviving_species": sum(1 for total in populations.values() if total > 0.0),
         "populations": populations,
+        "civ_population": civ_population,
         "telemetry": telemetry.to_metrics() if telemetry is not None else {},
     }
 
