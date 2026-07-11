@@ -172,3 +172,30 @@ needs a feature the plan schedules after M1 (`docs/PLAN.md` → *Roadmap beyond 
 | Malicious-mod sandboxing (no code exec outside the mod API) | Python-hook mods (M1 mods are data-only) |
 | Single wired extraction→ecology loop on one orchestrator | biology↔civilization biomass back-sync |
 | Real cross-massif tunnel topology | subsurface cave-network generator |
+
+---
+
+## Post-checklist enhancements
+
+Capabilities added after the M1 verification pass, each with tests:
+
+- **Rivers productionized** — `core/hydrology/rivers.py` builds the steepest-descent
+  (D8-style) flow graph from a DEM, accumulates drainage through an injected kernel,
+  classifies channels past a threshold, and sizes width/depth via Leopold & Maddock
+  hydraulic geometry. `tests/test_rivers.py`. (Previously the routing lived only in
+  the end-to-end test; lakes/depression-filling remain roadmap.)
+- **Sim-speed telemetry** — `Orchestrator` times each run against an injectable
+  monotonic clock (ticks/sec, seconds/tick, per-process wall time); surfaced on
+  `/metrics`, the `get_run_telemetry` command, and a `run_telemetry` WS event.
+  `tests/test_telemetry.py`.
+- **Migration realism** — oxygen axis (barometric from altitude), seasonal-extreme
+  axes (coldest-season / range from `ClimateState.seasons`), and a bounded long-range
+  seasonal-migration pull distinct from local diffusion. `tests/test_bio_migration_realism.py`.
+  (Full two-region path-memory migration remains roadmap.)
+- **Batch/overnight world sweep** — `core/sim/world_sweep.py` (pure engine +
+  habitability scorer) and `api/world_service.py` (concrete generate→score→select→deepen
+  over the real stack), exposed as the `run_world_sweep` command: generate N worlds
+  from seeds, keep the top K by habitability, deep-sim the winners (higher fidelity +
+  rivers + biology, telemetry captured). `tests/test_world_sweep.py`,
+  `tests/test_world_service.py`. (An unattended CLI wrapper for true overnight batches
+  awaits the `clients/cli/` client.)
