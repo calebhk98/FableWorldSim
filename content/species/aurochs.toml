@@ -37,6 +37,16 @@ tolerance_min = -200
 tolerance_max = 4000
 spread = 200
 
+# A large-bodied lowland grazer: real aurochs herds ran the plains, not the
+# high peaks, so thin air above roughly 3000-3500m (partial O2 pressure
+# below ~14 kPa; sea level is ~21 kPa) is intolerable.
+[traits.oxygen_kpa]
+comfort_min = 18
+comfort_max = 21.5
+tolerance_min = 14
+tolerance_max = 25
+spread = 1.0
+
 [biome_preference]
 temperate_grassland = 1.0
 savanna = 0.9

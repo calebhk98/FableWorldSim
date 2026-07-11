@@ -49,6 +49,11 @@ class Organism:
     comfort/tolerance band; ``diet`` maps each eaten species id to a
     preference weight; ``biome_preference`` maps a biome id to a land-cover
     preference (unlisted biomes fall back to a base weight).
+    ``seasonal_migration`` opts a species into the bounded multi-hop
+    seasonal pull on top of local diffusion (see
+    :mod:`core.biology.migration`); it is a flag, not a route — birds
+    redistribute toward wherever suitability is currently highest, not
+    along a remembered path.
     """
 
     species_id: str
@@ -62,6 +67,7 @@ class Organism:
     min_viable_population: int = 2
     oscillatory: bool = False
     sapient: bool = False
+    seasonal_migration: bool = False
     traits: Mapping[str, EnvBand] = field(default_factory=dict)
     biome_preference: Mapping[str, float] = field(default_factory=dict)
     diet: Mapping[str, float] = field(default_factory=dict)
@@ -140,6 +146,7 @@ def organism_from_content(item: ContentItem) -> Organism:
             min_viable_population=read_int(data, "min_viable_population", 2),
             oscillatory=read_bool(data, "oscillatory", default=False),
             sapient=read_bool(data, "sapient", default=False),
+            seasonal_migration=read_bool(data, "seasonal_migration", default=False),
             traits=_read_traits(data),
             biome_preference=read_weight_table(data, "biome_preference"),
             diet=read_weight_table(data, "diet"),
