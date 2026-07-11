@@ -18,8 +18,9 @@ from adapters.grid_registry import available_backends
 from adapters.hardware import probe_host, recommend
 from api.settings import get_setting, setting_paths, with_setting
 from api.state import AppState
-from api.world_service import report_to_dict, run_world_sweep
+from api.world_service import get_all_presets, report_to_dict, run_world_sweep
 from api.ws_events import SettingChangedEvent
+from core.sim.planet_config import PlanetConfig
 from core.sim.world_sweep import SweepReport
 
 CommandHandler = Callable[[AppState, BaseModel], object]
@@ -112,6 +113,31 @@ class SweepParams(BaseModel):
     deep_ticks: int = Field(
         default=5, ge=0, le=200, description="Biology ticks for each deep-sim run."
     )
+
+
+class ListScenariosParams(BaseModel):
+    """Arguments for list_scenarios (empty)."""
+
+
+class BuildWorldParams(BaseModel):
+    """Arguments for build_world command.
+
+    Either specify preset_name for a built-in scenario, or provide a full
+    planet_config dict matching PlanetConfig schema.
+    """
+
+    seed: int = Field(description="Random seed for terrain generation.")
+    preset_name: str | None = Field(
+        default="earth", description="Name of a scenario preset (earth, mars, venus, luna, etc)."
+    )
+    planet_config: dict[str, Any] | None = Field(
+        default=None,
+        description="Full PlanetConfig dict; if provided, overrides preset_name.",
+    )
+    resolution: int = Field(
+        default=1, ge=0, le=4, description="Grid resolution (coarser = faster)."
+    )
+    season_count: int = Field(default=2, ge=1, le=4, description="Number of seasons to simulate.")
 
 
 def apply_setting(state: AppState, path: str, value: object) -> object:
@@ -227,6 +253,71 @@ def _probe_hardware(state: AppState, params: BaseModel) -> object:
     return {"capabilities": asdict(caps), "recommendation": asdict(recommend(caps))}
 
 
+def _list_scenarios(state: AppState, params: BaseModel) -> object:
+    """Return all available scenario presets with names and descriptions."""
+    presets = get_all_presets()
+    result = []
+    for name, (config, description) in presets.items():
+        result.append(
+            {
+                "name": name,
+                "description": description,
+                "planet_name": config.name,
+            }
+        )
+    return {"scenarios": result}
+
+
+def _build_world(state: AppState, params: BaseModel) -> object:
+    """Build a world from a seed and a preset or custom PlanetConfig.
+
+    Returns a summary of the generated world's properties.
+    """
+    if not isinstance(params, BuildWorldParams):
+        msg = "build_world invoked with the wrong params model"
+        raise TypeError(msg)
+
+    from api.world_service import build_world
+
+    # Determine which planet config to use
+    planet = None
+    if params.planet_config is not None:
+        # Validate and build from the provided dict
+        try:
+            planet = PlanetConfig(**params.planet_config)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid planet_config: {exc}") from exc
+    elif params.preset_name:
+        # Load the preset
+        presets = get_all_presets()
+        if params.preset_name not in presets:
+            known = ", ".join(presets.keys())
+            raise KeyError(f"unknown preset {params.preset_name!r}; known: {known}")
+        planet, _description = presets[params.preset_name]
+
+    # Build the world
+    world = build_world(
+        params.seed,
+        resolution=params.resolution,
+        season_count=params.season_count,
+        planet=planet,
+    )
+
+    # Extract planet name (planet should not be None at this point)
+    planet_name = planet.name if planet is not None else "Unknown"
+
+    # Return a summary
+    return {
+        "seed": params.seed,
+        "preset": params.preset_name,
+        "planet_name": planet_name,
+        "grid_cell_count": len(list(world.grid.cells())),
+        "ocean_fraction": sum(
+            1 for on in world.sea_mask.ocean.values() if on
+        ) / len(list(world.grid.cells())),
+    }
+
+
 def build_default_registry() -> CommandRegistry:
     """Return the registry of built-in commands."""
     registry = CommandRegistry()
@@ -312,6 +403,26 @@ def build_default_registry() -> CommandRegistry:
             "(higher fidelity + rivers + biology). Returns the ranked report.",
             SweepParams,
             _run_world_sweep,
+            mutates=True,
+        )
+    )
+    registry.register(
+        Command(
+            "list_scenarios",
+            "Return all available scenario presets (earth, mars, venus, luna, etc.) "
+            "with names and descriptions.",
+            ListScenariosParams,
+            _list_scenarios,
+            mutates=False,
+        )
+    )
+    registry.register(
+        Command(
+            "build_world",
+            "Build a world from a seed and a named preset or custom PlanetConfig. "
+            "Returns a summary of the generated world's properties.",
+            BuildWorldParams,
+            _build_world,
             mutates=True,
         )
     )

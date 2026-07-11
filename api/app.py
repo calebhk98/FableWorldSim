@@ -136,6 +136,23 @@ def _register_discovery(app: FastAPI, state: AppState, registry: CommandRegistry
         """List every command with its parameter JSON Schema."""
         return registry.describe()
 
+    @app.get("/scenarios")
+    def scenarios() -> dict[str, Any]:
+        """List available scenario presets (earth, mars, venus, luna, etc.)."""
+        from api.world_service import get_all_presets
+
+        presets = get_all_presets()
+        result = []
+        for name, (config, description) in presets.items():
+            result.append(
+                {
+                    "name": name,
+                    "description": description,
+                    "planet_name": config.name,
+                }
+            )
+        return {"scenarios": result}
+
     @app.post("/commands/{name}")
     def run_command(
         name: str, request: Request, body: dict[str, Any] | None = None
