@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from core.sim.constants import (
     EARTH_SURFACE_PRESSURE_PA,
@@ -326,7 +326,7 @@ class PlanetConfig:
         Raises:
             ValueError: If the dict is structurally invalid.
         """
-        params = dict(data)
+        params: dict[str, Any] = dict(data)
 
         # Coerce atmosphere: dict -> Atmosphere, or validate it's an Atmosphere
         if "atmosphere" in params:
