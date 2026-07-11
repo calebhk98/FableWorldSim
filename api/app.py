@@ -205,9 +205,15 @@ def _register_observability(app: FastAPI, state: AppState) -> None:
     """Mount the metrics endpoint (structured logs go to stdlib logging)."""
 
     @app.get("/metrics")
-    def metrics() -> dict[str, int]:
-        """Return monotonically increasing server counters."""
-        return {**state.metrics, "ws_subscribers": state.bus.subscriber_count}
+    def metrics() -> dict[str, object]:
+        """Return server counters plus the latest run's speed telemetry."""
+        report: dict[str, object] = {
+            **state.metrics,
+            "ws_subscribers": state.bus.subscriber_count,
+        }
+        if state.sim_telemetry is not None:
+            report["sim"] = state.sim_telemetry
+        return report
 
 
 def _register_stream(app: FastAPI, state: AppState) -> None:

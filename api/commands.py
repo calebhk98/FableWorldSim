@@ -131,6 +131,11 @@ def _list_grid_backends(state: AppState, params: BaseModel) -> object:
     return list(available_backends())
 
 
+def _get_run_telemetry(state: AppState, params: BaseModel) -> object:
+    """Return the most recent simulation run's speed telemetry (or empty)."""
+    return state.sim_telemetry or {}
+
+
 def _probe_hardware(state: AppState, params: BaseModel) -> object:
     """Probe the host and return capabilities plus the auto profile."""
     caps = probe_host()
@@ -182,6 +187,15 @@ def build_default_registry() -> CommandRegistry:
             "recommended auto-scaling profile.",
             NoParams,
             _probe_hardware,
+        )
+    )
+    registry.register(
+        Command(
+            "get_run_telemetry",
+            "Return the most recent simulation run's speed telemetry "
+            "(ticks/sec, seconds/tick, per-process wall time); empty before any run.",
+            NoParams,
+            _get_run_telemetry,
         )
     )
     return registry
