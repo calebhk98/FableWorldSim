@@ -1,6 +1,9 @@
 # Sparrow — a small, prolific seed-eating songbird found nearly
 # everywhere.  Display name is the Fluent key species-sparrow in
-# content/locales.
+# content/locales.  Many real sparrow populations are partial migrants,
+# so it also carries seasonal_migration, exercising the bounded
+# multi-hop seasonal pull (see core.biology.migration) on top of the
+# local diffusion every species gets.
 sapient = false
 domain = "surface"
 growth_rate_per_year = 0.4
@@ -14,6 +17,7 @@ maturity_years = 0.5
 litter_size = 4
 reproduction = "sexual"
 min_viable_population = 2
+seasonal_migration = true
 color = "#B79A6E"
 
 [traits.temperature_k]

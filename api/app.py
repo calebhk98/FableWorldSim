@@ -21,6 +21,7 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from pydantic import BaseModel, ValidationError
 
 from api.commands import (
+    Command,
     CommandNotFoundError,
     CommandRegistry,
     apply_setting,
@@ -97,6 +98,26 @@ def _deny(state: AppState, principal: Principal, resource: str) -> HTTPException
     )
 
 
+def _execute_command(command: Command, state: AppState, params: BaseModel) -> object:
+    """Run a command's handler, translating late execution errors.
+
+    A handler can still reject validated params at execution time (e.g.
+    set_setting on an unknown path or an invalid value). Mirror the
+    /settings/{path} endpoint: unknown key -> 404, bad value -> 422,
+    never a raw 500 — the API is AI-driven, so malformed input is normal.
+    Write-tier handlers run under the single-writer lock.
+    """
+    try:
+        if command.mutates:
+            with state.write_lock:
+                return command.handler(state, params)
+        return command.handler(state, params)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+
 def _register_discovery(app: FastAPI, state: AppState, registry: CommandRegistry) -> None:
     """Mount the self-description + command-execution endpoints."""
 
@@ -140,11 +161,7 @@ def _register_discovery(app: FastAPI, state: AppState, registry: CommandRegistry
             principal.principal_id,
             command.mutates,
         )
-        if command.mutates:
-            with state.write_lock:
-                result = command.handler(state, params)
-        else:
-            result = command.handler(state, params)
+        result = _execute_command(command, state, params)
         state.metrics["commands_executed"] += 1
         return {"command": name, "result": result}
 
@@ -188,9 +205,15 @@ def _register_observability(app: FastAPI, state: AppState) -> None:
     """Mount the metrics endpoint (structured logs go to stdlib logging)."""
 
     @app.get("/metrics")
-    def metrics() -> dict[str, int]:
-        """Return monotonically increasing server counters."""
-        return {**state.metrics, "ws_subscribers": state.bus.subscriber_count}
+    def metrics() -> dict[str, object]:
+        """Return server counters plus the latest run's speed telemetry."""
+        report: dict[str, object] = {
+            **state.metrics,
+            "ws_subscribers": state.bus.subscriber_count,
+        }
+        if state.sim_telemetry is not None:
+            report["sim"] = state.sim_telemetry
+        return report
 
 
 def _register_stream(app: FastAPI, state: AppState) -> None:

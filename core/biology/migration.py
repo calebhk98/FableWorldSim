@@ -1,15 +1,24 @@
-"""Migration: suitability-gradient local diffusion across the grid graph.
+"""Migration: local diffusion, plus a bounded multi-hop seasonal pull.
 
 Populations drift toward better neighbouring habitat: each cell sends a
 small, count-conserving share of its people/biomass to adjacent cells in
 proportion to how suitable each neighbour is, with a little stochastic
-jitter so spread is not perfectly smooth.  The same routine runs over the
-surface grid and, for subterranean species, over the ``SubsurfaceGrid`` —
-only the neighbour and area functions differ, so digging life diffuses
-through the volume graph rather than surface adjacency.
+jitter so spread is not perfectly smooth.  The same routine (:func:`diffuse`)
+runs over the surface grid and, for subterranean species, over the
+``SubsurfaceGrid`` — only the neighbour and area functions differ, so
+digging life diffuses through the volume graph rather than surface
+adjacency.
 
-M1 models gradual local spread; true long-range seasonal migration
-(birds jumping between two distant known regions) is roadmap.
+On top of that, a species flagged ``seasonal_migration`` (see
+:class:`core.biology.organism.Organism`) additionally runs
+:func:`seasonal_pull` each step: the *same* suitability-weighted movement
+repeated for several hops within one tick, so a migratory population
+redistributes several cells toward better current habitat in a single
+step instead of creeping one cell at a time.  This is a bounded M1
+mechanic — a multi-hop pull toward whatever is suitable *right now* — not
+true path-memory migration between two remembered regions (a bird
+returning to a specific nesting ground); that two-region, path-aware
+model remains roadmap.
 """
 
 from __future__ import annotations
@@ -67,6 +76,48 @@ def diffuse(
         moving_count = value * geometry.area_of(loc) * moved
         result[loc] -= moving_count / geometry.area_of(loc)
         _deposit(result, weights, moving_count, geometry.area_of)
+    return result
+
+
+@dataclass(frozen=True)
+class SeasonalPullParams:
+    """Tuning for the bounded multi-hop seasonal pull (see module docstring).
+
+    ``hops`` repeats of a :func:`diffuse`-shaped move happen within one
+    step, each moving ``move_fraction`` of what remains at a location —
+    additive to, and independent of, the local :func:`diffuse` call the
+    same step already ran.
+    """
+
+    hops: int
+    move_fraction: float
+    jitter: float = 0.0
+
+
+def seasonal_pull(
+    density: Mapping[str, float],
+    geometry: Geometry,
+    suitability: Mapping[str, float],
+    params: SeasonalPullParams,
+    rng: Rng,
+) -> dict[str, float]:
+    """Return density after a bounded multi-hop seasonal redistribution.
+
+    Applies :func:`diffuse` ``params.hops`` times in a row against the
+    *same* suitability field, each hop forked to its own RNG stream so the
+    sequence stays deterministic.  Repeating the suitability-weighted move
+    lets population reach a neighbour's neighbour (and beyond) within a
+    single tick — a bird flying several cells toward better habitat in one
+    season, not just drifting into the adjacent cell — while still
+    conserving head count at every hop.  A non-migratory species never
+    calls this; it only ever gets the single local :func:`diffuse` step.
+    """
+    if params.hops <= 0 or params.move_fraction <= 0.0:
+        return dict(density)
+    hop_params = DiffusionParams(move_fraction=params.move_fraction, jitter=params.jitter)
+    result = dict(density)
+    for hop in range(params.hops):
+        result = diffuse(result, geometry, suitability, hop_params, rng.fork(f"hop:{hop}"))
     return result
 
 

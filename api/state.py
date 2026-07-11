@@ -12,11 +12,13 @@ import threading
 from typing import TYPE_CHECKING
 
 from adapters.access_roles import RoleBasedAccess
+from api.ws_events import RunTelemetryEvent
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
     from api.settings import Settings
+    from core.sim.orchestrator import RunTelemetry
     from ports.access import Access
 
 
@@ -74,3 +76,17 @@ class AppState:
             "commands_denied": 0,
             "settings_changed": 0,
         }
+        self.sim_telemetry: dict[str, object] | None = None
+        """Timing of the most recent simulation run (None until one runs)."""
+
+    def record_run_telemetry(self, telemetry: RunTelemetry) -> None:
+        """Store the latest run's timing and broadcast it to WS subscribers."""
+        self.sim_telemetry = telemetry.to_metrics()
+        self.bus.publish(
+            RunTelemetryEvent(
+                ticks=telemetry.ticks,
+                ticks_per_second=telemetry.ticks_per_second,
+                mean_seconds_per_tick=telemetry.mean_seconds_per_tick,
+                wall_seconds=telemetry.wall_seconds,
+            )
+        )

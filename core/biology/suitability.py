@@ -29,6 +29,27 @@ if TYPE_CHECKING:
 TEMPERATURE_AXIS = "temperature_k"
 PRECIPITATION_AXIS = "precipitation_mm_yr"
 ALTITUDE_AXIS = "altitude_m"
+OXYGEN_AXIS = "oxygen_kpa"
+"""Partial pressure of O2 in kilopascals (sea level ~21 kPa; thins with altitude).
+
+A species only feels this axis if it declares an ``[traits.oxygen_kpa]``
+band; one that does not is unaffected, exactly like any other axis a cell
+happens to lack (see :func:`env_response`).
+"""
+COLDEST_SEASON_AXIS = "coldest_month_temperature_k"
+"""The coldest of a cell's seasonal mean temperatures (a hard-winter signal).
+
+Distinct from :data:`TEMPERATURE_AXIS` (the annual mean): two cells can
+share an annual mean while one has a much colder winter, and a
+cold-intolerant species that declares this axis is excluded from that one
+even though the mean looks comfortable.
+"""
+TEMPERATURE_RANGE_AXIS = "temperature_range_k"
+"""A cell's seasonal temperature swing (warmest season minus coldest).
+
+Optional continental-climate signal alongside :data:`COLDEST_SEASON_AXIS`;
+most species will not declare a band for it.
+"""
 
 _DEFAULT_BASE_BIOME_PREFERENCE = 0.5
 """Preference an organism gives a biome it does not explicitly list."""

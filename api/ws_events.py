@@ -36,10 +36,21 @@ class HeartbeatEvent(BaseModel):
     tick: int = 0
 
 
+class RunTelemetryEvent(BaseModel):
+    """Wall-clock speed of the most recent simulation run."""
+
+    type: Literal["run_telemetry"] = "run_telemetry"
+    ticks: int = 0
+    ticks_per_second: float = 0.0
+    mean_seconds_per_tick: float = 0.0
+    wall_seconds: float = 0.0
+
+
 EVENT_MODELS: dict[str, type[BaseModel]] = {
     "hello": HelloEvent,
     "setting_changed": SettingChangedEvent,
     "heartbeat": HeartbeatEvent,
+    "run_telemetry": RunTelemetryEvent,
 }
 """Every streamable event type, keyed by its ``type`` discriminator."""
 

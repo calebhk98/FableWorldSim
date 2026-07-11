@@ -16,7 +16,13 @@ from typing import TYPE_CHECKING
 
 from core.biology.extinction import enforce_viability
 from core.biology.foodweb import FeedingParams, apply_offtake, feed_location
-from core.biology.migration import DiffusionParams, Geometry, diffuse
+from core.biology.migration import (
+    DiffusionParams,
+    Geometry,
+    SeasonalPullParams,
+    diffuse,
+    seasonal_pull,
+)
 from core.biology.population import GrowthParams, env_capacity, grow
 
 if TYPE_CHECKING:
@@ -128,14 +134,34 @@ class DomainRunner:
         field: Mapping[str, float],
         suitability: Mapping[str, float],
     ) -> _Field:
-        """Diffuse one species' field toward better neighbouring habitat."""
+        """Diffuse toward better neighbouring habitat, then a seasonal pull if flagged.
+
+        Every species gets the local :func:`diffuse` step; a species with
+        ``seasonal_migration=True`` additionally gets :func:`seasonal_pull`
+        on top, so it relocates several cells toward current good habitat
+        in the same tick a non-migratory species only creeps one cell.
+        """
         geometry = Geometry(neighbors_of=self.neighbors_of, area_of=self.area_of)
         params = DiffusionParams(
             move_fraction=self.params.migration_per_year * self.dt_years,
             jitter=self.params.migration_jitter,
         )
-        return diffuse(
+        moved = diffuse(
             field, geometry, suitability, params, self.rng.fork(f"migrate:{species_id}:{self.tick}")
+        )
+        if not self.organisms[species_id].seasonal_migration:
+            return moved
+        pull_params = SeasonalPullParams(
+            hops=self.params.seasonal_migration_hops,
+            move_fraction=self.params.seasonal_migration_fraction,
+            jitter=self.params.migration_jitter,
+        )
+        return seasonal_pull(
+            moved,
+            geometry,
+            suitability,
+            pull_params,
+            self.rng.fork(f"seasonal-pull:{species_id}:{self.tick}"),
         )
 
 

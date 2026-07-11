@@ -18,7 +18,9 @@ from adapters.grid_registry import available_backends
 from adapters.hardware import probe_host, recommend
 from api.settings import get_setting, setting_paths, with_setting
 from api.state import AppState
+from api.world_service import report_to_dict, run_world_sweep
 from api.ws_events import SettingChangedEvent
+from core.sim.world_sweep import SweepReport
 
 CommandHandler = Callable[[AppState, BaseModel], object]
 """Executes a command against the app state; the return must be JSON-able."""
@@ -88,6 +90,22 @@ class SetSettingParams(BaseModel):
     value: Any = Field(default=None, description="New value; validated by the schema.")
 
 
+class SweepParams(BaseModel):
+    """Arguments for run_world_sweep."""
+
+    base_seed: int = Field(
+        default=1, description="First seed; the sweep uses count consecutive seeds."
+    )
+    count: int = Field(default=6, ge=1, le=64, description="How many worlds to generate and score.")
+    keep_top_k: int = Field(default=2, ge=1, le=64, description="How many top worlds to deep-sim.")
+    resolution: int = Field(
+        default=1, ge=0, le=4, description="Grid resolution (coarser = faster)."
+    )
+    deep_ticks: int = Field(
+        default=5, ge=0, le=200, description="Biology ticks for each deep-sim run."
+    )
+
+
 def apply_setting(state: AppState, path: str, value: object) -> object:
     """Set one option, publish the change event, return the new value.
 
@@ -129,6 +147,36 @@ def _set_setting(state: AppState, params: BaseModel) -> object:
 def _list_grid_backends(state: AppState, params: BaseModel) -> object:
     """Return the known grid backend toggle names."""
     return list(available_backends())
+
+
+def _get_run_telemetry(state: AppState, params: BaseModel) -> object:
+    """Return the most recent simulation run's speed telemetry (or empty)."""
+    return state.sim_telemetry or {}
+
+
+def _surface_top_telemetry(state: AppState, report: SweepReport) -> None:
+    """Publish the best deepened world's telemetry on the /metrics surface."""
+    if not report.selected:
+        return
+    top = report.deepened.get(report.selected[0].seed)
+    if isinstance(top, dict) and isinstance(top.get("telemetry"), dict):
+        state.sim_telemetry = top["telemetry"]
+
+
+def _run_world_sweep(state: AppState, params: BaseModel) -> object:
+    """Generate many worlds, keep the best, and deep-sim the winners."""
+    if not isinstance(params, SweepParams):
+        msg = "run_world_sweep invoked with the wrong params model"
+        raise TypeError(msg)
+    report = run_world_sweep(
+        base_seed=params.base_seed,
+        count=params.count,
+        keep_top_k=params.keep_top_k,
+        resolution=params.resolution,
+        deep_ticks=params.deep_ticks,
+    )
+    _surface_top_telemetry(state, report)
+    return report_to_dict(report)
 
 
 def _probe_hardware(state: AppState, params: BaseModel) -> object:
@@ -182,6 +230,26 @@ def build_default_registry() -> CommandRegistry:
             "recommended auto-scaling profile.",
             NoParams,
             _probe_hardware,
+        )
+    )
+    registry.register(
+        Command(
+            "get_run_telemetry",
+            "Return the most recent simulation run's speed telemetry "
+            "(ticks/sec, seconds/tick, per-process wall time); empty before any run.",
+            NoParams,
+            _get_run_telemetry,
+        )
+    )
+    registry.register(
+        Command(
+            "run_world_sweep",
+            "Generate `count` worlds from consecutive seeds, fast-score each by "
+            "habitability, keep the top `keep_top_k`, and deep-sim the winners "
+            "(higher fidelity + rivers + biology). Returns the ranked report.",
+            SweepParams,
+            _run_world_sweep,
+            mutates=True,
         )
     )
     return registry

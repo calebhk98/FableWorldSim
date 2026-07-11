@@ -108,6 +108,12 @@ exclude = "adapters/stubs/"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra -q"
+# The fast subset (pre-commit) runs `-m "not slow"`; CI runs the whole suite.
+# `slow` marks full-sim / end-to-end / cross-backend tests that build a world
+# and step it — correct to run, but too heavy for every local commit.
+markers = [
+  "slow: heavy end-to-end / full-sim / cross-backend test (excluded from the pre-commit fast subset, always run in CI)",
+]
 
 # ---------------------------------------------------------------------------
 # Docstring coverage
