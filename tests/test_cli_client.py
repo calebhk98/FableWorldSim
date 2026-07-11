@@ -7,6 +7,12 @@ core/ or adapters/ imports.
 
 from __future__ import annotations
 
+import contextlib
+import json
+import socket
+import threading
+import time
+
 import pytest
 
 pytest.importorskip("fastapi")
@@ -183,3 +189,97 @@ class TestCLIMainEntryPoint:
             main(["nonexistent-command"])
         # Should exit with 1 for unrecognized command
         assert exc_info.value.code in (1, 2)  # 2 for argparse error
+
+
+def _free_port() -> int:
+    """Return an ephemeral TCP port free at call time."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+@contextlib.contextmanager
+def _live_server():
+    """Run the real FastAPI app on a real socket for the duration of the block.
+
+    Yields the base URL. This is what lets the end-to-end test below drive
+    the sim through nothing but the CLI's own HTTP calls -- a real listening
+    server, not an in-process ASGI shortcut -- proving the CLI alone can run
+    a headless world.
+    """
+    uvicorn = pytest.importorskip("uvicorn")
+    app = create_app(Settings())
+    port = _free_port()
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 10.0
+    while not server.started and time.monotonic() < deadline:
+        time.sleep(0.02)
+    try:
+        yield f"http://127.0.0.1:{port}"
+    finally:
+        server.should_exit = True
+        thread.join(timeout=10.0)
+
+
+class TestCLIWorldEndToEnd:
+    """Drive a scripted scenario THROUGH the CLI's own dispatch (``main()``)
+    against a real running server -- a genuine "headless run driven only by
+    the CLI" proof for the ``world`` command family."""
+
+    def test_world_lifecycle_via_cli_dispatch(self, capsys) -> None:
+        """create -> step -> query-field -> geometry -> export -> get, all via main()."""
+        pytest.importorskip("h3")
+        from clients.cli.main import main
+
+        with _live_server() as base_url:
+            common = ["--url", base_url, "--json"]
+
+            assert main([*common, "world", "get"]) == 0
+            before = json.loads(capsys.readouterr().out)
+            assert before["result"] == {"exists": False}
+
+            assert main([*common, "world", "create", "--seed", "123", "--resolution", "0"]) == 0
+            created = json.loads(capsys.readouterr().out)["result"]
+            assert created["exists"] is True
+            assert created["tick"] == 0
+            cell_count = created["cell_count"]
+            assert cell_count > 0
+
+            assert main([*common, "world", "step", "--ticks", "3"]) == 0
+            stepped = json.loads(capsys.readouterr().out)["result"]
+            assert stepped["tick"] == 3
+            assert stepped["ticks_advanced"] == 3
+
+            assert main([*common, "world", "get"]) == 0
+            after = json.loads(capsys.readouterr().out)["result"]
+            assert after["tick"] == 3
+            assert after["cell_count"] == cell_count
+
+            assert main([*common, "world", "query-field", "height"]) == 0
+            heights = json.loads(capsys.readouterr().out)["result"]
+            assert len(heights) == cell_count
+            assert all(isinstance(v, float) for v in heights.values())
+
+            assert main([*common, "world", "query-field", "temperature"]) == 0
+            temps = json.loads(capsys.readouterr().out)["result"]
+            assert len(temps) == cell_count
+
+            with pytest.raises(SystemExit) as exc_info:
+                main([*common, "world", "query-field", "bogus-field"])
+            assert exc_info.value.code == 1
+            capsys.readouterr()  # drain the fatal() error message
+
+            assert main([*common, "world", "geometry"]) == 0
+            geometry = json.loads(capsys.readouterr().out)["result"]
+            assert len(geometry) == cell_count
+            sample = next(iter(geometry.values()))
+            assert -90.0 <= sample["lat"] <= 90.0
+            assert -180.0 <= sample["lng"] <= 180.0
+
+            assert main([*common, "world", "export"]) == 0
+            recipe = json.loads(capsys.readouterr().out)["result"]
+            assert recipe["seed"] == 123
+            assert recipe["grid_resolution"] == 0

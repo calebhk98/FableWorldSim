@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
     from api.settings import Settings
+    from api.world_state import PersistedWorld
     from core.sim.orchestrator import RunTelemetry
     from ports.access import Access
     from ports.array_backend import ArrayBackend
@@ -83,6 +84,10 @@ class AppState:
         self.sim_telemetry: dict[str, object] | None = None
         """Timing of the most recent simulation run (None until one runs)."""
         self._compute_backend: ArrayBackend | None = None
+        self.world: PersistedWorld | None = None
+        """The one live, steppable world (see api.world_state), or None
+        until create_world runs. Mutations (create/step) go through
+        write_lock like every other state change."""
 
     @property
     def compute_backend(self) -> ArrayBackend:
