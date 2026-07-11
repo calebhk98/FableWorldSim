@@ -16,6 +16,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from core.hydrology.sea_mask import SeaMask
     from ports.grid import CellId
 
@@ -44,14 +46,26 @@ def is_surface_medium(medium: str) -> bool:
     return medium in SURFACE_MEDIA
 
 
-def medium_allows(medium: str, cell: CellId, sea_mask: SeaMask) -> bool:
+def medium_allows(
+    medium: str,
+    cell: CellId,
+    sea_mask: SeaMask,
+    lake_mask: Mapping[CellId, bool] | None = None,
+) -> bool:
     """Return whether a surface ``medium`` may occupy a surface ``cell``.
+
+    ``lake_mask`` (a per-cell ``is_lake`` field, e.g.
+    ``core.hydrology.lakes.LakeNetwork.is_lake``) is optional so every
+    existing caller that only knows about the ocean keeps working
+    unchanged; when supplied, a lake cell counts as water exactly like an
+    ocean cell, letting aquatic/amphibious species occupy inland lakes.
 
     Subterranean always returns ``False`` here; those organisms are gated
     on the ``SubsurfaceGrid`` instead.
     """
     if medium == INTERTIDAL:
         return sea_mask.intertidal[cell]
-    if sea_mask.ocean[cell]:
+    is_water = sea_mask.ocean[cell] or (lake_mask is not None and lake_mask.get(cell, False))
+    if is_water:
         return medium in _WATER_MEDIA
     return medium in _LAND_MEDIA

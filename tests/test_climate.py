@@ -186,6 +186,58 @@ def test_orographic_shadow_on_real_grid() -> None:
     assert windward > lee * 1.5
 
 
+def test_lake_surface_evaporates_like_open_water() -> None:
+    """A lake cell should contribute humidity like the ocean, not like bare
+    land, so a lake shows up as a moisture source for downwind precipitation
+    (the climate side of issue #12's lake wiring)."""
+    from core.climate.moisture import evaporation_field
+
+    cells = ["land", "lake"]
+    temps = dict.fromkeys(cells, 295.0)
+    ice = dict.fromkeys(cells, False)
+    mask = SeaMask(
+        sea_level_m=0.0, ocean=dict.fromkeys(cells, False), intertidal=dict.fromkeys(cells, False)
+    )
+
+    bare = evaporation_field(temps, mask, ice)
+    assert bare["land"] == bare["lake"], "identical cells evaporate alike with no lake_mask"
+
+    watered = evaporation_field(temps, mask, ice, lake_mask={"lake": True})
+    assert watered["land"] == bare["land"], "a non-lake cell is unaffected"
+    assert watered["lake"] > bare["lake"], "a lake cell should evaporate more than bare land"
+
+
+def test_precipitation_field_gets_extra_moisture_from_a_lake() -> None:
+    """A lake upwind of a dry stretch should measurably wet it more than an
+    otherwise identical, lake-free run of the same terrain."""
+    from core.climate.moisture import MoistureInputs, precipitation_field
+
+    planet = earth()
+    grid = create_grid("h3", resolution=1, radius_m=planet.radius_m)
+    heights = dict.fromkeys(grid.cells(), 0.0)
+    mask = build_sea_mask(grid, heights, ocean_fraction=0.0)
+    temps = dict.fromkeys(heights, 295.0)
+    ice = dict.fromkeys(heights, False)
+    winds = dict.fromkeys(heights, (7.0, 0.0))  # pure westerlies
+    lake_mask = {next(iter(heights)): True}
+
+    def total_rain(lakes: dict[CellId, bool] | None) -> float:
+        rain = precipitation_field(
+            grid,
+            MoistureInputs(
+                temps=temps,
+                winds=winds,
+                heights_m=heights,
+                sea_mask=mask,
+                ice=ice,
+                lake_mask=lakes if lakes is not None else {},
+            ),
+        )
+        return sum(rain.values())
+
+    assert total_rain(lake_mask) > total_rain(None)
+
+
 def test_earth_has_the_three_zonal_wind_bands() -> None:
     """Tropics, mid-latitudes, and poles must each drive a different band."""
     planet = earth()

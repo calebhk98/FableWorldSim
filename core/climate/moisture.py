@@ -11,7 +11,7 @@ because shadowing is emergent from depletion, not scripted.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from core.climate.temperature import FREEZING_POINT_K
@@ -39,19 +39,25 @@ def evaporation_field(
     temps: Mapping[CellId, float],
     sea_mask: SeaMask,
     ice: Mapping[CellId, bool],
+    lake_mask: Mapping[CellId, bool] | None = None,
 ) -> dict[CellId, float]:
     """Return per-cell humidity sourced by evaporation (dimensionless).
 
     Warm open water evaporates fully; frozen or cold surfaces barely at
-    all; land contributes a small soil/vegetation term.
+    all; land contributes a small soil/vegetation term. ``lake_mask``
+    (optional, e.g. ``core.hydrology.lakes.LakeNetwork.is_lake``) makes a
+    lake cell evaporate like open water too, instead of falling back to
+    the land term; omitting it (the default) reproduces the ocean-only
+    behavior every existing caller relies on.
     """
     humidity = {}
     for cell, temp in temps.items():
         warmth = (temp - _EVAPORATION_ZERO_K) / (_EVAPORATION_FULL_K - _EVAPORATION_ZERO_K)
         strength = min(1.0, max(0.0, warmth)) ** 2
+        is_water = sea_mask.ocean[cell] or (lake_mask is not None and lake_mask.get(cell, False))
         if ice[cell]:
             strength *= 0.05
-        elif not sea_mask.ocean[cell]:
+        elif not is_water:
             strength *= _LAND_EVAPORATION_FACTOR
         humidity[cell] = strength
     return humidity
@@ -93,6 +99,9 @@ class MoistureInputs:
     heights_m: Mapping[CellId, float]
     sea_mask: SeaMask
     ice: Mapping[CellId, bool]
+    lake_mask: Mapping[CellId, bool] = field(default_factory=dict)
+    """Per-cell ``is_lake`` field (optional); lets a lake surface evaporate
+    like open water alongside the ocean (see :func:`evaporation_field`)."""
 
 
 def precipitation_field(
@@ -107,7 +116,7 @@ def precipitation_field(
     forced upslope, so windward slopes are wet and lee sides dry.
     Whatever survives the journey falls as drizzle where it ends up.
     """
-    humidity = evaporation_field(inputs.temps, inputs.sea_mask, inputs.ice)
+    humidity = evaporation_field(inputs.temps, inputs.sea_mask, inputs.ice, inputs.lake_mask)
     rain = dict.fromkeys(humidity, 0.0)
     for _ in range(hops):
         moved = dict.fromkeys(humidity, 0.0)

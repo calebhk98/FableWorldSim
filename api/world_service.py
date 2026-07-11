@@ -36,7 +36,8 @@ from core.civilization.species import load_species
 from core.civilization.state import civ_population_total
 from core.civilization.tech import load_techs
 from core.climate.model import simulate_climate
-from core.hydrology.rivers import build_river_network
+from core.hydrology.lakes import build_lake_network
+from core.hydrology.rivers import build_river_network, steepest_descent_receivers
 from core.hydrology.sea_mask import build_sea_mask
 from core.sim.coupling import CoupledContext, CoupledProcess, WorldState
 from core.sim.orchestrator import Orchestrator
@@ -193,7 +194,9 @@ def deepen_seed(
     """Run the expensive simulation on one winner and summarize it.
 
     Rebuilds the world at higher seasonal fidelity, routes a river network,
-    and steps a seeded biology + civilization run under the orchestrator —
+    fills its depressions into a lake network (feeding aquatic habitat
+    suitability), and steps a seeded biology + civilization run under the
+    orchestrator —
     the two layers coupled through one shared plant-biomass field (see
     :mod:`core.sim.coupling`), so a civ's forestry and farmland measurably
     draw down what the food web itself depends on. Captures wall-clock
@@ -208,10 +211,26 @@ def deepen_seed(
         precipitation_mm_yr=world.climate.annual_precipitation_mm_yr,
         channel_threshold_m2=_CHANNEL_THRESHOLD_CELL_MULTIPLE * _mean_cell_area(world.grid),
     )
+    # Lakes fill the depressions steepest-descent routing left as pits,
+    # using the same flow-direction graph rivers just routed and the
+    # climate's own precipitation for catchment inflow (build_lake_network
+    # runs after climate/rivers, consuming their output -- see the module
+    # docstring's sequencing note).
+    lake_cells, lake_receivers, _, _ = steepest_descent_receivers(
+        world.grid, world.heights_m, world.sea_mask
+    )
+    lakes = build_lake_network(
+        world.grid,
+        world.heights_m,
+        world.sea_mask,
+        lake_receivers,
+        lake_cells,
+        precipitation_mm_yr=world.climate.annual_precipitation_mm_yr,
+    )
     organisms, biomes = _content()
     species, resources, techs = _civ_content()
     below = LayersBelow(
-        world.grid, world.climate, world.sea_mask, world.heights_m, world.biome_field
+        world.grid, world.climate, world.sea_mask, world.heights_m, world.biome_field, lakes
     )
     bio_ctx = build_biology_context(below, {org.species_id: org for org in organisms})
     civ_ctx = CivContext(
@@ -237,6 +256,7 @@ def deepen_seed(
     telemetry = orchestrator.telemetry
 
     channel_count = sum(1 for on in rivers.is_channel.values() if on)
+    lake_count = len(lakes.lakes)
     populations = {
         species_id: sum(field.values())
         for species_id, field in state.biology.surface_populations.items()
@@ -245,6 +265,7 @@ def deepen_seed(
     return {
         "seed": seed,
         "channel_count": channel_count,
+        "lake_count": lake_count,
         "biology_ticks": ticks,
         "surviving_species": sum(1 for total in populations.values() if total > 0.0),
         "populations": populations,

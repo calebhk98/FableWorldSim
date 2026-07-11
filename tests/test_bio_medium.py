@@ -55,3 +55,17 @@ def test_subterranean_is_never_a_surface_medium() -> None:
     assert not medium_allows(SUBTERRANEAN, _LAND, mask)
     assert not is_surface_medium(SUBTERRANEAN)
     assert is_surface_medium(TERRESTRIAL)
+
+
+def test_lake_cell_counts_as_water_for_the_medium_gate() -> None:
+    """A lake sits on dry (above sea level) land, so the ocean mask alone
+    would wrongly exclude aquatic life from it; a supplied ``lake_mask``
+    should admit aquatic species there and exclude a purely terrestrial
+    one, exactly as it would over the ocean."""
+    mask = _mask()
+    lake_mask = {_LAND: True}
+    assert medium_allows(AQUATIC, _LAND, mask, lake_mask)
+    assert not medium_allows(TERRESTRIAL, _LAND, mask, lake_mask)
+    # Without the lake mask (the default), the same cell is plain land.
+    assert not medium_allows(AQUATIC, _LAND, mask)
+    assert medium_allows(TERRESTRIAL, _LAND, mask)
