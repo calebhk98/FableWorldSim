@@ -135,10 +135,18 @@ def test_oscillatory_mode_glides_less_than_smoothed_mode_flattens() -> None:
     """The smoothed run's late-time wobble is negligible next to oscillatory's.
 
     Observed with seed 7 on a 2x2 grid over 45 ticks: oscillatory prey settle
-    into a late-window amplitude around 0.377 (individuals/m2 x cell count)
-    and predator around 0.0042, while the smoothed run's late-window
-    amplitude is of order 1e-6 for both — numerical residue around a fixed
-    point, not a cycle. The margin below (10x) is far inside that gap.
+    into a late-window amplitude around 0.49 (individuals/m2 x cell count)
+    and predator around 9e-4, while the smoothed run's late-window amplitude
+    is of order 1e-6 (prey) and exactly flat (predator) — numerical residue
+    around a fixed point, not a cycle. The margin below (10x) is far inside
+    that gap.
+
+    Predator's amplitude (and the module docstring's headline numbers) moved
+    from an earlier tuning after issue #15 added a food-limited term to
+    carrying capacity (``K = min(crowding cap x suitability, food cap)``):
+    predator's own capacity now tracks prey biomass instead of being a fixed
+    crowding x suitability product, which damps its oscillation somewhat
+    without changing the qualitative claim this test makes.
     """
     oscillatory_prey, oscillatory_predator = _run_totals(oscillatory=True)
     smoothed_prey, smoothed_predator = _run_totals(oscillatory=False)
@@ -154,7 +162,7 @@ def test_oscillatory_mode_glides_less_than_smoothed_mode_flattens() -> None:
 
     # The oscillatory run should still be swinging by a wide, unmistakable margin.
     assert oscillatory_prey_amp > 0.1
-    assert oscillatory_predator_amp > 0.002
+    assert oscillatory_predator_amp > 0.0005
 
     # And the gap between the two regimes should be large, not knife-edge.
     assert oscillatory_prey_amp > 10.0 * max(smoothed_prey_amp, 1e-9)

@@ -19,6 +19,8 @@ crowding_cap_per_m2 = 6e-5
 lifespan_years = 400
 maturity_years = 30
 litter_size = 1.0
+gestation_years = 1.5
+fertility_window_years = 300
 
 [propensity]
 woodworking = 2.0
