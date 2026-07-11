@@ -123,21 +123,24 @@ def test_registry_rejects_unknown_backend() -> None:
 
 
 def test_isea_names_the_missing_binary_when_unavailable() -> None:
-    """'isea' fails loudly and namedly when the DGGRID binary is missing.
+    """'isea' fails loudly and namedly when it can't run.
 
-    This only certifies the graceful-degradation path for environments
-    without a ``dggrid`` executable (this repo's dev/CI extras deliberately
-    don't guarantee one — see ``pyproject.toml``'s ``grid-isea`` extra); it
-    is not ISEA coverage. Real backend behavior is exercised in
+    This only certifies the graceful-degradation path when ISEA is
+    unavailable — either the ``dggrid4py`` package isn't installed (CI's
+    extras deliberately don't include it, so the error names the
+    ``grid-isea`` extra) or the package is present but the ``dggrid``
+    binary is missing (the error names ``dggrid``). It is not ISEA
+    coverage. Real backend behavior is exercised in
     ``test_grid_backends.py`` and ``test_conservation.py``, which run
-    whenever ``dggrid`` actually is on ``PATH``.
+    whenever a working ``dggrid`` actually is on ``PATH``.
     """
     try:
         create_grid("isea", resolution=1)
     except GridBackendUnavailableError as exc:
-        assert "dggrid" in str(exc).lower()
+        msg = str(exc).lower()
+        assert "dggrid" in msg or "grid-isea" in msg
     else:
-        pytest.skip("a working 'dggrid' binary is installed in this environment")
+        pytest.skip("a working ISEA/'dggrid' backend is available in this environment")
 
 
 def test_total_area_matches_sphere() -> None:
